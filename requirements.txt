@@ -1,0 +1,40 @@
+# Core framework dependencies
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+
+# LLM and AI libraries
+langchain
+langgraph
+llama-index
+llama-index-readers-file
+google-generativeai
+langchain-google-genai
+
+# Vector database and search
+faiss-cpu
+sentence-transformers
+
+# Web search
+tavily-python
+
+# Document processing
+pypdf
+pymupdf
+python-multipart
+
+# HTTP and async
+httpx
+aiofiles
+
+# Environment and configuration
+python-dotenv
+
+# Logging and monitoring
+structlog
+
+# Development dependencies
+pytest
+pytest-asyncio
+black

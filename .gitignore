@@ -1,0 +1,82 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.venv/
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Pip and package management
+pip-log.txt
+pip-delete-this-directory.txt
+requirements.txt.dev
+*.egg-info/
+dist/
+build/
+*.egg
+
+# IDE and editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# Testing and coverage
+.pytest_cache/
+.coverage
+coverage.xml
+*.cover
+htmlcov/
+tox/
+nox/
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# Cache and temporary files
+*.cache
+cache/
+*.tmp
+temp/
+
+# Build artifacts
+dist/
+build/
+
+# Documentation builds
+docs/_build/
+
+# Database migrations (if using frameworks like Django or Alembic)
+migrations/
+*.migration
+
+# Specific to FastAPI/Uvicorn (based on your project context)
+*.db  
+*.sqlite3
+*.bak
+
+# Project-specific ignores (add your own)
+data/pdfs/*
+data/vectorstore/*
