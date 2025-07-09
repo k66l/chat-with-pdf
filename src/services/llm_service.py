@@ -94,11 +94,14 @@ class LLMService:
 
         WEB SEARCH (use when question is about):
         - Current events, recent releases, announcements (this week/month/year)
-        - Real-time information, breaking news, latest developments
+        - AI model releases, updates, launches ("When did X release?", "When was X launched?")
         - Company announcements, product launches, recent updates
         - "What did [company] release recently/this month/lately?"
+        - "When did [model/product] release/launch?"
+        - Real-time information, breaking news, latest developments
         - Current market conditions, recent trends, live data
         - Information that changes frequently or is time-sensitive
+        - Questions about release dates, launch dates, availability dates
 
         AMBIGUOUS (use when):
         - Question contains vague terms WITHOUT specific context:
@@ -177,18 +180,21 @@ class LLMService:
                 f"{msg.role}: {msg.content}" for msg in recent_messages
             ])
 
-        # Simplified prompt to avoid overwhelming the model
+        # Enhanced prompt with better context handling
         system_prompt = f"""Answer the user's question based on the research papers provided.
 
         Question: {question}
 
         Research Papers Context:
-        {context[:3000]}{'...' if len(context) > 3000 else ''}
+        {context[:8000]}{'...' if len(context) > 8000 else ''}
 
         Instructions:
         - Provide a clear, direct answer based on the papers
-        - Cite specific findings and methods when available
+        - Look for comparative statements like "consistently outperforms", "achieves optimal performance", "best evaluation performance"
+        - If papers mention specific authors and years matching the question, prioritize those findings
         - Be concise and informative
+        - DO NOT include inline source citations (like "Author et al. - Year, Page X") in your answer
+        - The sources will be provided separately, so focus only on the content
 
         Answer:"""
 
@@ -212,8 +218,6 @@ class LLMService:
 
                 {context_preview}
 
-                Sources: {', '.join(sources)}
-
                 For more specific information, please try asking about particular aspects like methods, results, or datasets."""
 
                 return fallback_answer
@@ -230,8 +234,6 @@ class LLMService:
             return f"""I found relevant information about {question} in the research papers:
 
             {context_preview}
-
-            Sources: {', '.join(sources)}
 
             There was a technical issue generating a complete response, but the above content should help answer your question."""
 

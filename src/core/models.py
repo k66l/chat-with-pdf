@@ -47,8 +47,8 @@ class QuestionResponse(BaseModel):
     answer: str = Field(..., description="The generated answer")
     session_id: str = Field(
         ..., description="Session identifier (generated if not provided in request)")
-    sources: List[str] = Field(
-        default=[], description="Sources used for the answer")
+    # sources: List[str] = Field(
+    #     default=[], description="Sources used for the answer")
     query_type: QueryType = Field(..., description="Type of query processed")
     confidence: float = Field(..., ge=0.0, le=1.0,
                               description="Confidence score (enhanced by evaluation)")

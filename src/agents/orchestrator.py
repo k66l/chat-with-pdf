@@ -111,12 +111,54 @@ class AgentOrchestrator:
                 chat_history=chat_history
             )
 
-            # Update state
-            state.final_answer = answer
-            state.sources = sources
-            state.confidence = confidence
+            # Check if PDF search found no relevant results or detected out-of-scope query
+            no_results_indicators = [
+                "couldn't find any relevant information",
+                "appears to be about current events",
+                "recent developments that wouldn't be covered",
+                "documents might not contain information",
+                "do not contain information about",
+                "don't have information about",
+                "not covered in the",
+                "no information about",
+                "not found in the papers",
+                "papers do not contain"
+            ]
 
-            logger.info("PDF search completed", sources_count=len(sources))
+            should_fallback = (
+                confidence <= 0.1 or  # Very low confidence
+                not sources or  # No sources found
+                any(indicator in answer.lower()
+                    for indicator in no_results_indicators)
+            )
+
+            if should_fallback:
+                logger.info("PDF search found no relevant results, falling back to web search",
+                            confidence=confidence, sources_count=len(sources))
+
+                # Try web search instead
+                web_answer, web_sources, web_confidence = await web_search_agent.answer_question(
+                    question=state.question,
+                    chat_history=chat_history
+                )
+
+                # Update state with web search results
+                state.final_answer = web_answer
+                state.sources = web_sources
+                state.confidence = web_confidence
+                # Update query type to reflect actual search used
+                state.query_type = QueryType.WEB_SEARCH
+
+                logger.info("Fallback to web search completed",
+                            sources_count=len(web_sources), web_confidence=web_confidence)
+            else:
+                # Use PDF search results
+                state.final_answer = answer
+                state.sources = sources
+                state.confidence = confidence
+
+                logger.info("PDF search completed", sources_count=len(sources))
+
             return state
 
         except Exception as e:

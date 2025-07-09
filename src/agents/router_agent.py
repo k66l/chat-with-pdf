@@ -114,16 +114,26 @@ class RouterAgent:
                 "facebook", "twitter", "x.com", "uber", "netflix"
             ]
 
+            # AI model/product names that indicate current events
+            ai_models = [
+                "claude", "sonnet", "gpt", "chatgpt", "dall-e", "midjourney",
+                "bard", "palm", "llama", "gemini", "copilot", "codex"
+            ]
+
             # Current events patterns (more comprehensive)
             current_patterns = [
-                r"what did .* (release|announce|launch)",
+                r"(what|when) did .* (release|announce|launch)",
+                r"when (was|did) .* (release|announce|launch)",
                 r"(recent|latest) .* (announcement|news|release)",
                 r".* (this month|this week|today|recently)",
                 r"(new|latest) .* from",
                 r"just (released|announced|launched)",
                 r"breaking news",
                 r"what.*(recently|latest).*(announce|release)",
-                r"recent.*(development|announcement|news)"
+                r"recent.*(development|announcement|news)",
+                r"when.*release",
+                r"release date.*",
+                r".*release date"
             ]
 
             # Check for temporal + company combination
@@ -131,10 +141,12 @@ class RouterAgent:
                 indicator in question_lower for indicator in temporal_indicators)
             has_company = any(
                 company in question_lower for company in companies)
+            has_ai_model = any(
+                model in question_lower for model in ai_models)
 
-            if has_temporal and has_company:
-                logger.info("Detected obvious web search query (temporal + company)",
-                            question=question, temporal_found=True, company_found=True)
+            if has_temporal and (has_company or has_ai_model):
+                logger.info("Detected obvious web search query (temporal + company/model)",
+                            question=question, temporal_found=True, company_found=has_company, model_found=has_ai_model)
                 return True
 
             # Check for current events patterns
@@ -145,13 +157,13 @@ class RouterAgent:
                                 question=question, pattern=pattern)
                     return True
 
-            # Additional check for questions about companies without temporal words
+            # Additional check for questions about companies/models without temporal words
             # but with action words that suggest current events
-            if has_company:
+            if has_company or has_ai_model:
                 action_words = ["announce", "release",
                                 "launch", "reveal", "unveil", "introduce"]
                 if any(action in question_lower for action in action_words):
-                    logger.info("Detected obvious web search query (company + action)",
+                    logger.info("Detected obvious web search query (company/model + action)",
                                 question=question)
                     return True
 

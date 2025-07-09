@@ -12,13 +12,29 @@ from .memory import router as memory_router
 from .middleware import RequestResponseLoggingMiddleware, RequestMetricsMiddleware, global_metrics
 
 # Setup logging
+import logging
+import sys
+from structlog.dev import ConsoleRenderer
+
+# Configure standard library logging
+logging.basicConfig(
+    format="%(message)s",
+    stream=sys.stdout,
+    level=getattr(logging, settings.log_level.upper(), logging.INFO),
+)
+
+# Configure structlog for readable console output
 structlog.configure(
     processors=[
         structlog.stdlib.filter_by_level,
         structlog.stdlib.add_logger_name,
         structlog.stdlib.add_log_level,
         structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.JSONRenderer()
+        structlog.processors.TimeStamper(fmt="ISO"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        # Use ConsoleRenderer for readable output in development
+        ConsoleRenderer(colors=True)
     ],
     context_class=dict,
     logger_factory=structlog.stdlib.LoggerFactory(),
@@ -88,5 +104,7 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=True,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
+        access_log=True,
+        use_colors=True
     )
