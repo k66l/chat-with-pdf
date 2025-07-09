@@ -18,8 +18,32 @@ class WebSearchAgent:
         """Initialize the Web Search Agent."""
         self.tavily_api_key = settings.tavily_api_key
         self.client = TavilyClient(api_key=self.tavily_api_key)
-        self.max_results = 5
+        self.max_results = self._get_max_results()
+        self.context_length_limit = self._get_context_length_limit()
+        self.fallback_preview_length = self._get_fallback_preview_length()
+        self.enhancement_message_limit = self._get_enhancement_message_limit()
+        self.current_info_results = self._get_current_info_results()
         logger.info("Web Search Agent initialized")
+
+    def _get_max_results(self) -> int:
+        """Get configurable maximum search results."""
+        return getattr(settings, 'web_search_max_results', 5)
+
+    def _get_context_length_limit(self) -> int:
+        """Get configurable context length limit."""
+        return getattr(settings, 'web_search_context_limit', 3000)
+
+    def _get_fallback_preview_length(self) -> int:
+        """Get configurable fallback preview length."""
+        return getattr(settings, 'web_search_fallback_preview', 1000)
+
+    def _get_enhancement_message_limit(self) -> int:
+        """Get configurable enhancement message limit."""
+        return getattr(settings, 'web_search_enhancement_messages', 3)
+
+    def _get_current_info_results(self) -> int:
+        """Get configurable current info search results."""
+        return getattr(settings, 'web_search_current_info_results', 3)
 
     async def search_web(
         self,
@@ -113,7 +137,7 @@ class WebSearchAgent:
             Question: {question}
 
             Search Results:
-            {context[:3000]}{'...' if len(context) > 3000 else ''}
+            {context[:self.context_length_limit]}{'...' if len(context) > self.context_length_limit else ''}
 
             Instructions:
             - Provide current, accurate information
@@ -138,8 +162,8 @@ class WebSearchAgent:
                     "Empty response from LLM for web search, generating fallback")
 
                 # Create a basic answer from the search results
-                context_preview = context[:1000] + \
-                    "..." if len(context) > 1000 else context
+                context_preview = (context[:self.fallback_preview_length] +
+                                   "..." if len(context) > self.fallback_preview_length else context)
                 fallback_answer = f"""Based on current web search results about {question}:
 
                 {context_preview}
@@ -174,8 +198,8 @@ class WebSearchAgent:
             # Build conversation context if available
             conversation_context = ""
             if chat_history:
-                # Last 3 messages for context
-                recent_messages = chat_history[-3:]
+                # Use configurable number of recent messages for context
+                recent_messages = chat_history[-self.enhancement_message_limit:]
                 conversation_context = "\n".join([
                     f"{msg.role}: {msg.content}" for msg in recent_messages
                 ])
@@ -221,7 +245,7 @@ class WebSearchAgent:
         try:
             # Search for recent information
             query = f"latest {topic} 2024 recent developments"
-            results = await self.search_web(query, max_results=3)
+            results = await self.search_web(query, max_results=self.current_info_results)
 
             if not results:
                 return {

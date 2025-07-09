@@ -21,7 +21,43 @@ class AgentOrchestrator:
     def __init__(self):
         """Initialize the orchestrator."""
         self.graph = self._build_graph()
+        # Configurable thresholds and settings
+        self.fallback_confidence_threshold = self._get_fallback_confidence_threshold()
+        self.ambiguous_query_confidence = self._get_ambiguous_query_confidence()
+        self.error_confidence = self._get_error_confidence()
+        self.no_results_indicators = self._get_no_results_indicators()
         logger.info("Agent Orchestrator initialized")
+
+    def _get_fallback_confidence_threshold(self) -> float:
+        """Get configurable fallback confidence threshold."""
+        from ..core.config import settings
+        return getattr(settings, 'fallback_confidence_threshold', 0.1)
+
+    def _get_ambiguous_query_confidence(self) -> float:
+        """Get configurable ambiguous query confidence."""
+        from ..core.config import settings
+        return getattr(settings, 'ambiguous_query_confidence', 0.3)
+
+    def _get_error_confidence(self) -> float:
+        """Get configurable error confidence."""
+        from ..core.config import settings
+        return getattr(settings, 'error_confidence', 0.0)
+
+    def _get_no_results_indicators(self) -> List[str]:
+        """Get configurable no results indicators."""
+        from ..core.config import settings
+        return getattr(settings, 'no_results_indicators', [
+            "couldn't find any relevant information",
+            "appears to be about current events",
+            "recent developments that wouldn't be covered",
+            "documents might not contain information",
+            "do not contain information about",
+            "don't have information about",
+            "not covered in the",
+            "no information about",
+            "not found in the papers",
+            "papers do not contain"
+        ])
 
     def _build_graph(self) -> StateGraph:
         """Build the LangGraph state machine."""
@@ -112,24 +148,11 @@ class AgentOrchestrator:
             )
 
             # Check if PDF search found no relevant results or detected out-of-scope query
-            no_results_indicators = [
-                "couldn't find any relevant information",
-                "appears to be about current events",
-                "recent developments that wouldn't be covered",
-                "documents might not contain information",
-                "do not contain information about",
-                "don't have information about",
-                "not covered in the",
-                "no information about",
-                "not found in the papers",
-                "papers do not contain"
-            ]
-
             should_fallback = (
-                confidence <= 0.1 or  # Very low confidence
+                confidence <= self.fallback_confidence_threshold or  # Very low confidence
                 not sources or  # No sources found
                 any(indicator in answer.lower()
-                    for indicator in no_results_indicators)
+                    for indicator in self.no_results_indicators)
             )
 
             if should_fallback:
@@ -205,7 +228,8 @@ class AgentOrchestrator:
             # Update state
             state.final_answer = clarification
             state.sources = []
-            state.confidence = 0.3  # Low confidence for ambiguous queries
+            # Configurable confidence for ambiguous queries
+            state.confidence = self.ambiguous_query_confidence
 
             logger.info("Ambiguous query handled")
             return state
@@ -223,7 +247,7 @@ class AgentOrchestrator:
             # Handle errors
             if state.error:
                 state.final_answer = f"I encountered an error: {state.error}. Please try again."
-                state.confidence = 0.0
+                state.confidence = self.error_confidence
 
             # Evaluate the answer quality using the Evaluation Agent
             if state.final_answer and state.query_type:

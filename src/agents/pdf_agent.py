@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Any, Tuple
 import structlog
+import re
 
 from ..core.models import ChatMessage
 from ..services.vector_store import vector_store_service
@@ -15,8 +16,9 @@ class PDFAgent:
 
     def __init__(self):
         """Initialize the PDF Agent."""
-        self.max_retrieved_docs = 10  # Increased to capture more diverse results
-        self.score_threshold = 0.1  # Lowered to 0.1 to capture more diverse results
+        self.max_retrieved_docs = 15  # Increased to capture more diverse results
+        # Lowered to capture more diverse results including table data
+        self.score_threshold = 0.05
         logger.info("PDF Agent initialized")
 
     async def search_documents(
@@ -87,7 +89,7 @@ class PDFAgent:
                 )
                 return no_docs_response, [], 0.0
 
-            # Prepare context from retrieved documents
+            # Prepare context from retrieved documents with enhanced table handling
             context_parts = []
             sources = []
 
@@ -96,10 +98,14 @@ class PDFAgent:
                 metadata = doc['metadata']
                 score = doc['score']
 
+                # Enhanced content processing for table data
+                processed_content = self._enhance_table_content(
+                    content, question)
+
                 # Add document context
                 source_info = f"{metadata.get('source', 'Unknown')} (Page {metadata.get('page', 'N/A')})"
                 context_parts.append(
-                    f"Document {i+1} ({source_info}):\n{content}")
+                    f"Document {i+1} ({source_info}):\n{processed_content}")
 
                 # Track unique sources
                 if source_info not in sources:
@@ -108,8 +114,8 @@ class PDFAgent:
             # Combine context
             context = "\n\n".join(context_parts)
 
-            # Generate answer using LLM
-            answer = await llm_service.synthesize_answer(
+            # Generate answer using LLM with enhanced prompt for numerical data
+            answer = await self._generate_enhanced_answer(
                 question=question,
                 context=context,
                 sources=sources,
@@ -138,18 +144,178 @@ class PDFAgent:
             )
             return error_response, [], 0.0
 
+    def _enhance_table_content(self, content: str, question: str) -> str:
+        """Enhanced content processing for table data and numerical information."""
+        try:
+            # Check if this is a table or numerical chunk
+            if content.startswith('TABLE DATA:') or content.startswith('NUMERICAL DATA:'):
+                # This is a special chunk, extract the actual data
+                actual_content = content.replace('TABLE DATA:', '').replace(
+                    'NUMERICAL DATA:', '').strip()
+
+                # For table data, try to format it better
+                if content.startswith('TABLE DATA:'):
+                    # Look for percentage patterns and format them
+                    actual_content = re.sub(
+                        r'(\d+\.?\d*%)\s*', r'\1 ', actual_content)
+                    actual_content = re.sub(
+                        r'(\d+\.?\d*)\s*%\s*', r'\1% ', actual_content)
+
+                return actual_content
+
+            # Regular content processing
+            # Look for percentage patterns and ensure they're properly formatted
+            content = re.sub(r'(\d+\.?\d*%)\s*', r'\1 ', content)
+            content = re.sub(r'(\d+\.?\d*)\s*%\s*', r'\1% ', content)
+
+            # Look for number patterns mentioned in the question
+            question_numbers = re.findall(r'\d+\.?\d*', question)
+            for number in question_numbers:
+                if number in content:
+                    # Highlight this number in the content
+                    content = re.sub(
+                        rf'\b({re.escape(number)})\b', r'**\1**', content)
+
+            return content
+
+        except Exception as e:
+            logger.error("Error enhancing table content", error=str(e))
+            return content
+
+    async def _generate_enhanced_answer(
+        self,
+        question: str,
+        context: str,
+        sources: List[str],
+        chat_history: List[ChatMessage] = None
+    ) -> str:
+        """Generate enhanced answer with better handling of numerical data and table information."""
+        try:
+            # Check if this is a numerical/table query
+            is_numerical_query = any(term in question.lower() for term in [
+                'percentage', 'percent', '%', 'accuracy', 'score', 'number', 'value',
+                'execution', 'exact match', 'f1', 'table', 'figure', 'data'
+            ]) or any(char.isdigit() for char in question)
+
+            # Check for queries about comparative performance or rankings
+            is_prompt_accuracy_query = any(term in question.lower() for term in [
+                'highest', 'best', 'top', 'optimal', 'maximum', 'superior',
+                'template', 'method', 'approach', 'technique'
+            ]) and any(term in question.lower() for term in [
+                'accuracy', 'performance', 'score', 'result'
+            ])
+
+            if is_prompt_accuracy_query:
+                # Enhanced prompt for best approach/method queries
+                enhanced_prompt = f"""Answer the question about the best approach or method based on the research data provided.
+
+                Question: {question}
+
+                Context from research papers:
+                {context}
+
+                Instructions:
+                1. In the NUMERICAL DATA sections, look for patterns where method names are followed by numerical values
+                2. Extract method names and their corresponding highest numerical scores
+                3. The format typically shows: "MethodName [various numbers] highest_score"
+                4. Identify the method with the highest score as the best approach
+                5. Present the recommendation directly with method names and their performance scores
+                6. Do NOT include inline citations
+                7. Do NOT use hedging language - be direct and confident
+                8. Extract the actual performance data from the numerical sections
+
+                Format: State the paper's recommendations directly with method names and their performance scores."""
+
+                return await llm_service.generate_simple_response(enhanced_prompt)
+
+            elif is_numerical_query:
+                # Enhanced prompt for numerical data
+                enhanced_prompt = f"""You are answering a question about specific numerical data from research papers. 
+                
+                Question: {question}
+                
+                Context from research papers:
+                {context}
+                
+                Instructions:
+                1. Extract EXACT method names from the NUMERICAL DATA sections and match them with their scores
+                2. Identify the highest performing methods with their specific numerical results
+                3. Present the findings as definitive results from the paper
+                4. Do NOT include inline citations like (Document X, Page Y)
+                5. Do NOT use hedging language like "appears to be" or "seems to indicate"
+                6. Be direct and confident in presenting the numerical results
+                7. Keep the answer short and focused on the specific data requested
+                
+                Format: State the numerical results directly with their corresponding method names."""
+
+                return await llm_service.generate_simple_response(enhanced_prompt)
+            else:
+                # Standard answer generation
+                return await llm_service.synthesize_answer(
+                    question=question,
+                    context=context,
+                    sources=sources,
+                    chat_history=chat_history
+                )
+
+        except Exception as e:
+            logger.error("Error generating enhanced answer", error=str(e))
+            # Fallback to standard answer generation
+            return await llm_service.synthesize_answer(
+                question=question,
+                context=context,
+                sources=sources,
+                chat_history=chat_history
+            )
+
     async def _enhanced_document_search(self, question: str) -> List[Dict[str, Any]]:
         """Enhanced document search that tries multiple strategies to find relevant content."""
         try:
             # First, try the regular search
             docs = await self.search_documents(question)
 
-            # Extract author information from the question to check if we need targeted search
-            import re
+            # Extract paper information from the question
+            # Look for pattern: "...in [Author] [Year]" or "...in [Author] et al. [Year]"
+            paper_match = re.search(r'\bin\s+([A-Z][a-z]+(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\(?\d{4}\)?)', question)
+            
+            # Also check for author/year patterns for backward compatibility
             author_match = re.search(
-                r'(Zhang|Rajkumar|Chang|Katsogiannis).*?(\d{4})', question, re.IGNORECASE)
+                r'([A-Z][a-z]+)(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\((\d{4})\)', question) or \
+                re.search(r'([A-Z][a-z]+)(?:\s+et\s+al\.?)?\s*\((\d{4})\)', question) or \
+                re.search(r'([A-Z][a-z]+)(?:\s+and\s+[A-Z][a-z]+)?\s*.*?(\d{4})', question)
 
-            if author_match:
+            # Handle paper-specific search using "in [Paper Reference]" pattern
+            if paper_match:
+                paper_reference = paper_match.group(1)
+                logger.info(f"Found paper reference: {paper_reference}")
+                
+                # Search directly for the paper reference
+                paper_docs = await self.search_documents(paper_reference, top_k=10, score_threshold=0.05)
+                docs.extend(paper_docs)
+                
+                # Extract author and year from the paper reference
+                ref_author_match = re.search(r'([A-Z][a-z]+)', paper_reference)
+                ref_year_match = re.search(r'(\d{4})', paper_reference)
+                
+                if ref_author_match and ref_year_match:
+                    author_name = ref_author_match.group(1)
+                    year = ref_year_match.group(1)
+                    
+                    # Filter for documents from this specific paper
+                    paper_specific_docs = [
+                        doc for doc in docs
+                        if author_name.lower() in doc['metadata'].get('source', '').lower() and
+                        year in doc['metadata'].get('source', '')
+                    ]
+                    
+                    # If we found paper-specific docs, prioritize them heavily
+                    if paper_specific_docs:
+                        logger.info(f"Found {len(paper_specific_docs)} documents from {author_name} {year}")
+                        for doc in paper_specific_docs:
+                            doc['score'] = doc['score'] * 3.0  # Triple boost for exact paper match
+                        docs.extend(paper_specific_docs)
+            
+            elif author_match:
                 author_name = author_match.group(1)
                 year = author_match.group(2)
 
@@ -166,22 +332,26 @@ class PDFAgent:
 
                     # Try a more targeted search for the specific author/year
                     targeted_query = f"{author_name} {year}"
-                    targeted_docs = await self.search_documents(targeted_query, top_k=3, score_threshold=0.1)
+                    targeted_docs = await self.search_documents(targeted_query, top_k=5, score_threshold=0.05)
 
-                    # Also try searching for key terms from the question
+                    # Extract key terms dynamically from the question
                     key_terms = []
-                    # Always try SimpleDDL-MD-Chat if it could be relevant
-                    if any(term in question.lower() for term in ['prompt', 'template', 'zero-shot', 'accuracy', 'spider']):
-                        key_terms.append('SimpleDDL-MD-Chat')
-                    if 'prompt template' in question.lower():
-                        key_terms.append('prompt template')
-                    if 'accuracy' in question.lower():
-                        key_terms.append('accuracy')
-                    if 'spider' in question.lower():
-                        key_terms.append('Spider')
+                    question_words = question.lower().split()
+
+                    # Add relevant nouns and technical terms from the question
+                    technical_terms = ['template', 'accuracy',
+                                       'performance', 'method', 'approach', 'model']
+                    for word in question_words:
+                        if word in technical_terms or word.endswith('ing') or word.endswith('ed'):
+                            key_terms.append(word)
+
+                    # Add any numbers found in the question
+                    for word in question_words:
+                        if any(char.isdigit() for char in word):
+                            key_terms.append(word)
 
                     for term in key_terms:
-                        term_docs = await self.search_documents(term, top_k=5, score_threshold=0.1)
+                        term_docs = await self.search_documents(term, top_k=8, score_threshold=0.05)
                         # Filter for the specific author
                         author_term_docs = [
                             doc for doc in term_docs
@@ -194,6 +364,51 @@ class PDFAgent:
 
                     # Add targeted docs
                     docs.extend(targeted_docs)
+
+            # Enhanced search for comparative or performance-related content
+            comparative_terms = ['highest', 'best', 'optimal',
+                                 'superior', 'maximum', 'compare', 'comparison']
+            if any(term in question.lower() for term in comparative_terms):
+                # Search for tables and figures that might contain comparative data
+                for table_num in range(1, 6):  # Search tables 1-5
+                    table_docs = await self.search_documents(f'Table {table_num}', top_k=5, score_threshold=0.05)
+                    docs.extend(table_docs)
+
+                # Search for performance-related terms
+                performance_terms = [
+                    'outperforms', 'performance', 'results', 'comparison', 'evaluation']
+                for term in performance_terms:
+                    if term in question.lower():
+                        perf_docs = await self.search_documents(term, top_k=6, score_threshold=0.05)
+                        docs.extend(perf_docs)
+                        logger.info(f"Added {len(perf_docs)} {term} documents")
+
+            # Enhanced search for table-specific content
+            if any(term in question.lower() for term in ['table', 'figure', 'data', 'results', 'percentage', '%']):
+                # Search for table chunks specifically
+                table_docs = await self.search_documents('TABLE DATA', top_k=8, score_threshold=0.05)
+                docs.extend(table_docs)
+                logger.info(f"Added {len(table_docs)} table-related documents")
+
+            # Enhanced search for numerical data
+            numerical_terms = ['percentage', '%', 'accuracy',
+                               'score', 'number', 'value', 'result']
+            has_numbers = any(char.isdigit() for char in question)
+
+            if any(term in question.lower() for term in numerical_terms) or has_numbers:
+                # Search for numerical chunks specifically
+                numerical_docs = await self.search_documents('NUMERICAL DATA', top_k=8, score_threshold=0.05)
+                docs.extend(numerical_docs)
+                logger.info(
+                    f"Added {len(numerical_docs)} numerical data documents")
+
+                # Extract numbers from the question and search for them
+                numbers = re.findall(r'\d+\.?\d*', question)
+                for number in numbers:
+                    number_docs = await self.search_documents(number, top_k=5, score_threshold=0.05)
+                    docs.extend(number_docs)
+                    logger.info(
+                        f"Added {len(number_docs)} documents for number {number}")
 
             # Remove duplicates based on content (keep highest scoring version)
             seen_content = {}
@@ -214,8 +429,8 @@ class PDFAgent:
                 for doc in unique_docs:
                     source = doc['metadata'].get('source', '')
                     if author_name.lower() in source.lower() and year in source:
-                        # Boost the score for mentioned author's content
-                        doc['score'] = doc['score'] * 1.2  # 20% boost
+                        # Boost the score significantly for mentioned author's content
+                        doc['score'] = doc['score'] * 2.0  # 100% boost for exact match
                         author_docs.append(doc)
                     else:
                         other_docs.append(doc)
@@ -224,9 +439,9 @@ class PDFAgent:
                 author_docs.sort(key=lambda x: x['score'], reverse=True)
                 other_docs.sort(key=lambda x: x['score'], reverse=True)
 
-                # Prioritize author docs but include some other docs too
+                # Prioritize author docs heavily - use 80% of slots for mentioned author
                 max_author_docs = min(
-                    len(author_docs), self.max_retrieved_docs // 2)
+                    len(author_docs), int(self.max_retrieved_docs * 0.8))
                 max_other_docs = self.max_retrieved_docs - max_author_docs
 
                 final_docs = author_docs[:max_author_docs] + \
@@ -245,45 +460,34 @@ class PDFAgent:
     async def _is_out_of_scope_query(self, question: str) -> bool:
         """Check if a query is clearly out of scope for academic papers."""
         try:
-            # Simple keyword-based detection for clearly temporal/current events
-            temporal_keywords = [
-                "this month", "this week", "recently", "latest release",
-                "just announced", "breaking", "today", "yesterday",
-                "current", "now", "this year 2024", "what did", "released"
-            ]
-
-            company_keywords = [
-                "openai", "google", "microsoft", "meta", "apple",
-                "amazon", "tesla", "nvidia"
-            ]
-
             question_lower = question.lower()
 
-            # Check if question contains temporal + company keywords
-            has_temporal = any(
-                keyword in question_lower for keyword in temporal_keywords)
-            has_company = any(
-                keyword in question_lower for keyword in company_keywords)
+            # Check for temporal indicators suggesting current events
+            temporal_patterns = [
+                r'\btoday\b', r'\byesterday\b', r'\bthis (week|month|year)\b',
+                r'\brecently\b', r'\blatest\b', r'\bjust (announced|released)\b',
+                r'\bcurrent\b', r'\bnow\b', r'\bbreaking\b'
+            ]
 
-            if has_temporal and has_company:
-                logger.info("Detected out-of-scope query", question=question)
-                return True
-
-            # Check for common current events patterns
-            current_events_patterns = [
-                "what did .* release",
-                "latest .* announcement",
-                "recent .* news",
-                ".* this month",
-                ".* this week"
+            # Check for corporate/commercial contexts
+            commercial_patterns = [
+                r'\b(company|corporation|startup|business)\b.*\b(announce|release|launch)\b',
+                r'\b(announce|release|launch)\b.*\b(company|corporation|startup|business)\b'
             ]
 
             import re
-            for pattern in current_events_patterns:
-                if re.search(pattern, question_lower):
-                    logger.info("Detected current events pattern",
-                                question=question, pattern=pattern)
-                    return True
+            # Check temporal patterns
+            has_temporal = any(re.search(pattern, question_lower)
+                               for pattern in temporal_patterns)
+
+            # Check commercial patterns
+            has_commercial = any(re.search(pattern, question_lower)
+                                 for pattern in commercial_patterns)
+
+            # Out of scope if clearly temporal AND commercial context
+            if has_temporal and has_commercial:
+                logger.info("Detected out-of-scope query", question=question)
+                return True
 
             return False
 

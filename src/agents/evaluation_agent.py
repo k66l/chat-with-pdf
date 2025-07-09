@@ -17,13 +17,72 @@ class EvaluationAgent:
     def __init__(self):
         """Initialize the Evaluation Agent."""
         self.evaluation_history: List[Dict[str, Any]] = []
-        self.quality_thresholds = {
+        # Configurable quality thresholds - can be adjusted based on requirements
+        self.quality_thresholds = self._get_quality_thresholds()
+        self.max_history = self._get_max_history_size()
+        logger.info("Evaluation Agent initialized")
+
+    def _get_quality_thresholds(self) -> Dict[str, float]:
+        """Get configurable quality thresholds."""
+        # These can be overridden based on environment or config
+        from ..core.config import settings
+        return getattr(settings, 'quality_thresholds', {
             'excellent': 0.9,
             'good': 0.7,
             'fair': 0.5,
             'poor': 0.3
-        }
-        logger.info("Evaluation Agent initialized")
+        })
+
+    def _get_max_history_size(self) -> int:
+        """Get configurable maximum history size."""
+        from ..core.config import settings
+        return getattr(settings, 'evaluation_history_limit', 1000)
+
+    def _get_factual_indicators(self) -> List[str]:
+        """Get configurable factual indicators."""
+        from ..core.config import settings
+        return getattr(settings, 'factual_indicators', [
+            'according to', 'based on', 'research shows', 'studies indicate',
+            'data suggests', 'evidence', 'findings show', 'results indicate',
+            'analysis reveals', 'experiments demonstrate'
+        ])
+
+    def _get_domain_quality_scores(self) -> Dict[tuple, int]:
+        """Get configurable domain quality scoring."""
+        from ..core.config import settings
+        return getattr(settings, 'domain_quality_scores', {
+            ('.edu', '.gov', '.org'): 2,
+            ('wikipedia', 'academic', 'research', 'scholar'): 1,
+            ('arxiv', 'pubmed', 'ieee', 'acm'): 2,
+            ('.com', '.net', 'blog'): 0
+        })
+
+    def _get_coherence_criteria(self) -> Dict[str, Any]:
+        """Get configurable coherence evaluation criteria."""
+        from ..core.config import settings
+        return getattr(settings, 'coherence_criteria', {
+            'min_length': 50,
+            'max_length': 2000,
+            'min_sentence_length': 10,
+            'max_sentence_length': 100,
+            'good_length_score': 1.0,
+            'poor_length_score': 0.7,
+            'good_sentence_score': 1.0,
+            'poor_sentence_score': 0.8,
+            'diversity_multiplier': 2
+        })
+
+    def _get_confidence_weights(self) -> Dict[str, float]:
+        """Get configurable weights for overall confidence calculation."""
+        from ..core.config import settings
+        return getattr(settings, 'confidence_weights', {
+            'relevance': 0.25,
+            'completeness': 0.20,
+            'coherence': 0.15,
+            'factual_consistency': 0.20,
+            'source_quality': 0.10,
+            'retrieval_confidence': 0.10
+        })
 
     async def evaluate_answer(
         self,
@@ -156,6 +215,9 @@ class EvaluationAgent:
     async def _evaluate_coherence(self, answer: str) -> float:
         """Evaluate the coherence and readability of the answer."""
         try:
+            # Get configurable criteria
+            criteria = self._get_coherence_criteria()
+
             # Basic coherence metrics
             sentences = answer.split('.')
             sentence_count = len([s for s in sentences if s.strip()])
@@ -166,10 +228,15 @@ class EvaluationAgent:
             unique_words = len(set(words))
             word_diversity = unique_words / max(len(words), 1)
 
-            # Basic coherence score calculation
-            length_score = 1.0 if 50 <= len(answer) <= 2000 else 0.7
-            sentence_score = 1.0 if 10 <= avg_sentence_length <= 100 else 0.8
-            diversity_score = min(word_diversity * 2, 1.0)
+            # Configurable coherence score calculation
+            length_score = (criteria['good_length_score']
+                            if criteria['min_length'] <= len(answer) <= criteria['max_length']
+                            else criteria['poor_length_score'])
+            sentence_score = (criteria['good_sentence_score']
+                              if criteria['min_sentence_length'] <= avg_sentence_length <= criteria['max_sentence_length']
+                              else criteria['poor_sentence_score'])
+            diversity_score = min(
+                word_diversity * criteria['diversity_multiplier'], 1.0)
 
             coherence_score = (
                 length_score + sentence_score + diversity_score) / 3
@@ -195,10 +262,7 @@ class EvaluationAgent:
                 base_score = 0.4
 
             # Check for factual claims in the answer
-            factual_indicators = [
-                'according to', 'based on', 'research shows',
-                'studies indicate', 'data suggests', 'evidence'
-            ]
+            factual_indicators = self._get_factual_indicators()
 
             has_factual_backing = any(indicator in answer.lower()
                                       for indicator in factual_indicators)
@@ -225,15 +289,17 @@ class EvaluationAgent:
             if query_type == QueryType.PDF_SEARCH:
                 base_score = 0.9  # PDF sources are curated
             elif query_type == QueryType.WEB_SEARCH:
-                # Evaluate web source quality
+                # Evaluate web source quality using configurable criteria
                 quality_indicators = 0
+                domain_scores = self._get_domain_quality_scores()
+
                 for source in sources:
                     source_lower = source.lower()
                     # Check for reputable domains/indicators
-                    if any(domain in source_lower for domain in ['.edu', '.gov', '.org']):
-                        quality_indicators += 2
-                    elif any(domain in source_lower for domain in ['wikipedia', 'academic', 'research']):
-                        quality_indicators += 1
+                    for domain_group, score in domain_scores.items():
+                        if any(domain in source_lower for domain in domain_group):
+                            quality_indicators += score
+                            break  # Only count the highest score per source
 
                 base_score = min(0.5 + (quality_indicators * 0.1), 1.0)
             else:
@@ -260,14 +326,7 @@ class EvaluationAgent:
         """Calculate weighted overall confidence score."""
         try:
             # Weighted average with different importance
-            weights = {
-                'relevance': 0.25,
-                'completeness': 0.20,
-                'coherence': 0.15,
-                'factual_consistency': 0.20,
-                'source_quality': 0.10,
-                'retrieval_confidence': 0.10
-            }
+            weights = self._get_confidence_weights()
 
             overall_score = (
                 relevance * weights['relevance'] +
@@ -334,9 +393,9 @@ class EvaluationAgent:
 
             self.evaluation_history.append(evaluation_record)
 
-            # Keep only last 1000 evaluations to prevent memory issues
-            if len(self.evaluation_history) > 1000:
-                self.evaluation_history = self.evaluation_history[-1000:]
+            # Keep only last N evaluations to prevent memory issues
+            if len(self.evaluation_history) > self.max_history:
+                self.evaluation_history = self.evaluation_history[-self.max_history:]
 
         except Exception as e:
             logger.error("Error storing evaluation", error=str(e))

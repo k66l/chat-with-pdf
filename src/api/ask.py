@@ -72,7 +72,7 @@ async def ask_question(request: QuestionRequest):
         enhanced_response = QuestionResponse(
             answer=response.answer,
             session_id=session_id,
-            # sources=response.sources,
+            sources=response.sources,
             query_type=response.query_type,
             confidence=response.confidence,
             is_new_session=is_new_session,

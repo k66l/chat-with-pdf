@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     tavily_api_key: str = Field(..., env="TAVILY_API_KEY")
 
     # LLM Settings
-    model_name: str = Field(default="gemini-pro", env="MODEL_NAME")
+    model_name: str = Field(default="gemini-2.5-flash", env="MODEL_NAME")
     max_tokens: int = Field(default=2000, env="MAX_TOKENS")
     temperature: float = Field(default=0.7, env="TEMPERATURE")
 

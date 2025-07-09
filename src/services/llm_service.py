@@ -91,6 +91,9 @@ class LLMService:
         - Specific research papers, authors, datasets mentioned in academic literature
         - Technical methods, algorithms, architectures described in papers
         - Prompting strategies for LLMs in research context
+        - Specific table/section references with academic context (e.g., "Table 3 in Zhang et al. 2024")
+        - Academic metrics and datasets (Spider, WikiSQL, execution accuracy, EX %)
+        - Research comparisons and benchmarks
 
         WEB SEARCH (use when question is about):
         - Current events, recent releases, announcements (this week/month/year)
@@ -113,21 +116,33 @@ class LLMService:
           * Dataset not specified when asking about performance
           * No accuracy target or metric mentioned
           * No specific use case or domain context
+          * No specific type of model or prediction task mentioned
         - Multiple possible interpretations exist
         - Question is too general or lacks specificity
+        - Questions about "good models" without specifying domain/task
 
         IMPORTANT: If a question contains SPECIFIC CONTEXT, do NOT mark as ambiguous:
         - ✅ "How many examples for good accuracy on Spider dataset?" → PDF_SEARCH (has dataset)
         - ✅ "What is good accuracy using exact match metric?" → PDF_SEARCH (has metric)
         - ✅ "How many examples for Text-to-SQL tasks?" → PDF_SEARCH (has domain)
+        - ✅ "Which prompt template gave highest accuracy in Zhang et al. 2024?" → PDF_SEARCH (has author/year)
+        - ✅ "What does Table 3 show about Text-to-SQL performance?" → PDF_SEARCH (has table + academic context)
+        - ✅ "What is a good model for Text-to-SQL prediction?" → PDF_SEARCH (has specific domain)
         - ❌ "How many examples are enough?" → AMBIGUOUS (no context)
         - ❌ "What is good accuracy?" → AMBIGUOUS (no dataset/metric)
+        - ❌ "What is a good model for prediction?" → AMBIGUOUS (no specific domain/task)
 
         CRITICAL: Be especially strict about vague quantitative terms ONLY when no context:
         - "How many X are enough?" → Check for dataset/domain context first
         - "What is good accuracy?" → Check for dataset/metric context first
         - "Which method is best?" → Check for task/criteria context first
         - "How to optimize X?" → Check for specific goals/constraints first
+
+        SPECIAL CASES:
+        - Questions with table/section references AND academic context → PDF_SEARCH
+        - Questions with author names AND years → PDF_SEARCH
+        - Questions with specific datasets (Spider, WikiSQL) → PDF_SEARCH
+        - Questions with specific metrics (execution accuracy, EX %) → PDF_SEARCH
 
         Be especially careful with temporal keywords:
         - "this month", "recently", "latest release", "just announced" → WEB SEARCH
@@ -192,6 +207,9 @@ class LLMService:
         - Provide a clear, direct answer based on the papers
         - Look for comparative statements like "consistently outperforms", "achieves optimal performance", "best evaluation performance"
         - If papers mention specific authors and years matching the question, prioritize those findings
+        - Do NOT include inline citations like (Document X, Page Y)
+        - Be direct and confident in presenting the findings
+        - Keep the answer short and focused
         - Be concise and informative
         - DO NOT include inline source citations (like "Author et al. - Year, Page X") in your answer
         - The sources will be provided separately, so focus only on the content
