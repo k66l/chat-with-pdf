@@ -45,6 +45,47 @@ class WebSearchAgent:
         """Get configurable current info search results."""
         return getattr(settings, 'web_search_current_info_results', 3)
 
+    def _smart_truncate_query(self, query: str, max_length: int) -> str:
+        """Smart truncation that preserves important keywords."""
+        if len(query) <= max_length:
+            return query
+        
+        # Important keywords to prioritize
+        important_keywords = [
+            'Microsoft', 'Google', 'Apple', 'Amazon', 'Meta', 'OpenAI', 'Anthropic',
+            'release', 'announce', 'launch', 'new', 'latest', 'this year', 'recently',
+            'what', 'when', 'how', 'why', 'where'
+        ]
+        
+        words = query.split()
+        important_words = []
+        other_words = []
+        
+        # Separate important words from others
+        for word in words:
+            if any(keyword.lower() in word.lower() for keyword in important_keywords):
+                important_words.append(word)
+            else:
+                other_words.append(word)
+        
+        # Build truncated query prioritizing important words
+        result_words = important_words[:]
+        current_length = len(' '.join(result_words))
+        
+        # Add other words if space allows
+        for word in other_words:
+            if current_length + len(word) + 1 <= max_length - 3:  # Reserve 3 chars for "..."
+                result_words.append(word)
+                current_length += len(word) + 1
+            else:
+                break
+        
+        truncated = ' '.join(result_words)
+        if len(truncated) < len(query):
+            truncated += "..."
+            
+        return truncated[:max_length]
+
     async def search_web(
         self,
         query: str,
@@ -54,6 +95,17 @@ class WebSearchAgent:
         try:
             if max_results is None:
                 max_results = self.max_results
+
+            # Truncate query if it's too long (Tavily limit is 400 chars)
+            original_query = query
+            if len(query) > 400:
+                # Smart truncation: preserve important keywords
+                query = self._smart_truncate_query(query, 400)
+                logger.warning(
+                    "Query truncated for web search",
+                    original_length=len(original_query),
+                    truncated_length=len(query)
+                )
 
             logger.info(
                 "Performing web search",

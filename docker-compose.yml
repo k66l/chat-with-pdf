@@ -11,17 +11,17 @@ services:
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - MAX_TOKENS=${MAX_TOKENS:-1000}
       - TEMPERATURE=${TEMPERATURE:-0.7}
-      - VECTOR_STORE_PATH=${VECTOR_STORE_PATH:-./data/vectorstore}
+      - VECTOR_STORE_PATH=${VECTOR_STORE_PATH:-/app/data/vectorstore}
       - PDF_STORAGE_PATH=${PDF_STORAGE_PATH:-./data/pdfs}
       - EMBEDDING_MODEL=${EMBEDDING_MODEL:-models/text-embedding-004}
       - MAX_MEMORY_MESSAGES=${MAX_MEMORY_MESSAGES:-10}
       - HOST=${HOST:-0.0.0.0}
       - PORT=${PORT:-8000}
     volumes:
-      # Persist data across container restarts
-      - ./data:/app/data
-      - ./logs:/app/logs
-      # Mount PDFs for easy access
+      # Use Docker volumes for persistent data
+      - vector_data:/app/data/vectorstore
+      - app_logs:/app/logs
+      # Keep host mount for PDF uploads (read-only)
       - ./data/pdfs:/app/data/pdfs:ro
     restart: unless-stopped
     healthcheck:
@@ -49,6 +49,10 @@ networks:
   chat-with-pdf-network:
     driver: bridge
 
-# Optional: Redis volume (uncomment if using Redis)
-# volumes:
-#   redis_data: 
+volumes:
+  vector_data:
+    driver: local
+  app_logs:
+    driver: local
+  # Optional: Redis volume (uncomment if using Redis)
+  # redis_data: 

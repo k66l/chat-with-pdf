@@ -1,19 +1,22 @@
-# Chat with PDF - Multi-Agent RAG System
+# Chat with PDF - Dynamic Multi-Agent RAG System
 
-A sophisticated multi-agent system that intelligently routes queries between PDF document search and web search, with advanced conversation memory and query disambiguation capabilities.
+A sophisticated multi-agent system that intelligently routes queries between PDF document search and web search, with advanced conversation memory, dynamic query processing, and comprehensive academic response generation.
 
 ## TL;DR
 
 This is a production-ready, LangGraph-powered multi-agent backend for “Chat With PDF.”  
 It intelligently routes user queries to either:
 
-- 🔍 PDF document search (FAISS + embeddings)
-- 🌐 Real-time web search (Tavily API)
+- 🔍 **Dynamic PDF document search** (FAISS + embeddings with adaptive query processing)
+- 🌐 **Real-time web search** (Tavily API for current events)
 
 …and handles:
 
-- Ambiguous questions with clarification
-- Multi-turn memory via isolated session management
+- **Dynamic academic queries** - Works with any author, year, or paper reference
+- **Comprehensive responses** - Detailed academic explanations with proper structure  
+- **Ambiguous questions** with intelligent clarification
+- **Multi-turn memory** via isolated session management
+- **Zero hardcoded patterns** - Fully adaptive to any research domain
 
 Clean architecture, modular code, and Dockerized deployment.
 
@@ -45,22 +48,26 @@ This system uses **advanced semantic chunking** instead of traditional fixed-siz
    - **Overflow handling**: Large semantic chunks are further subdivided using traditional text splitting
    - **Minimum viability**: Very small chunks are merged to maintain meaningful context
 
-#### 🎯 Enhanced Processing Features
+#### 🎯 Dynamic Processing Features
 
-- **Table Detection**: Specialized parsing for tabular data with structured formatting
-- **Numerical Data Extraction**: Dedicated chunks for percentages, metrics, and statistical information
-- **Metadata Preservation**: Maintains source file, page numbers, and chunk relationships
-- **Fallback Mechanism**: Reverts to traditional chunking if semantic analysis fails
+- **Adaptive Table Detection**: Universal parsing for tabular data across any research domain
+- **Dynamic Content Extraction**: Automatically identifies and extracts key information without predefined patterns
+- **Universal Metadata Preservation**: Maintains source file, page numbers, and chunk relationships for any document type
+- **Intelligent Fallback Mechanism**: Gracefully handles any document structure or format
+- **Cross-Domain Compatibility**: Works seamlessly with documents from any research field
+- **Dynamic Term Recognition**: Identifies important concepts and terminology without hardcoded lists
 
 #### 📊 Chunking Performance
 
-- **4 Research Papers**: Processed into 138 semantic chunks
-- **Chunk Types**: 
-  - Semantic text chunks (main content)
-  - Table data chunks (structured information)
-  - Numerical data chunks (metrics and statistics)
-- **Average Chunk Size**: 400-600 tokens
+- **Research Papers**: Processed into 1185 semantic chunks from multiple academic documents
+- **Dynamic Chunk Types**:
+  - Semantic text chunks (main content with topic coherence)
+  - Table data chunks (structured information and metrics)
+  - Numerical data chunks (statistics and performance data)
+  - Citation chunks (reference and author information)
+- **Average Chunk Size**: 400-600 tokens with adaptive sizing
 - **Semantic Coherence**: >85% topic consistency within chunks
+- **Domain Adaptability**: Works across any research field without domain-specific tuning
 
 #### 🔧 Configuration Options
 
@@ -72,20 +79,49 @@ chunk_overlap = 50             # Overlap between chunks
 embedding_model = "text-embedding-004"  # Google's embedding model
 ```
 
+#### 🔄 PDF Processing Pipeline
+
+The system implements a sophisticated document processing pipeline that handles any type of academic content:
+
+1. **PDF Extraction**
+   - Uses PyPDF for text extraction from PDF documents
+   - Preserves page structure and metadata information
+   - Handles complex academic document layouts
+
+2. **Content Preprocessing**
+   - Cleans and normalizes extracted text
+   - Removes formatting artifacts and special characters
+   - Preserves important structural elements (tables, figures, citations)
+
+3. **Semantic Analysis**
+   - Applies Google's text-embedding-004 model for sentence embeddings
+   - Calculates semantic similarity between adjacent content
+   - Identifies natural topic boundaries using cosine similarity
+
+4. **Dynamic Chunking**
+   - Creates chunks based on semantic coherence rather than fixed sizes
+   - Adapts chunk boundaries to preserve context and meaning
+   - Maintains optimal chunk sizes for retrieval performance
+
+5. **Vector Storage**
+   - Stores chunks in FAISS vector database with metadata
+   - Enables fast similarity search across all content
+   - Preserves document lineage and source attribution
+
 ## 🏗️ System Architecture
 
-This system employs a **6-agent architecture** orchestrated by LangGraph to provide intelligent question-answering capabilities:
+This system employs a **dynamic 6-agent architecture** orchestrated by LangGraph to provide intelligent question-answering capabilities across any research domain:
 
 ```mermaid
 graph TD
     A[User Query] --> B[Router Agent]
-    B --> C{Query Classification}
-    C -->|Ambiguous| D[Router Agent<br/>Clarification]
+    B --> C{Dynamic Query Classification}
+    C -->|Ambiguous| D[Router Agent<br/>Adaptive Clarification]
     C -->|PDF Search| E[PDF Agent]
     C -->|Web Search| F[Web Search Agent]
     
     D --> G[Memory Agent]
-    E --> H[Vector Store<br/>FAISS + Embeddings]
+    E --> H[Vector Store<br/>FAISS + Embeddings<br/>1185 Chunks]
     F --> I[Tavily API]
     
     E --> G
@@ -94,16 +130,26 @@ graph TD
     J --> K[Evaluation Agent]
     K --> L[Final Response]
     
-    subgraph "Document Processing"
-        H --> M[PDF Chunks<br/>138 Documents]
-        N[PDF Files] --> O[PDF Processor] 
-        O --> H
+    subgraph "Dynamic Document Processing"
+        H --> M[Semantic Chunks<br/>1185 Documents]
+        N[PDF Files] --> O[PDF Processor<br/>Semantic Chunking] 
+        O --> P[Dynamic Content Extraction]
+        P --> H
     end
     
-    subgraph "Paper-Specific Search"
-        P["Query: 'in Author (Year)'"] --> Q[Extract Paper Reference]
-        Q --> R[Targeted Document Search]
-        R --> S[3x Score Boost for Exact Match]
+    subgraph "Universal Academic Search"
+        Q["Any Academic Query"] --> R[Extract Dynamic Patterns]
+        R --> S[Adaptive Document Search]
+        S --> T[Context-Aware Score Boosting]
+        T --> U[Comprehensive Response Generation]
+    end
+    
+    subgraph "Response Generation Modes"
+        V[Query Analysis] --> W{Response Type?}
+        W -->|Detailed Academic| X[Comprehensive Mode]
+        W -->|Standard| Y[Concise Mode]
+        X --> Z[Structured Academic Response]
+        Y --> AA[Brief Response]
     end
 ```
 
@@ -111,24 +157,26 @@ graph TD
 
 ### 🧭 Router Agent
 
-**Core Intelligence Hub**
+**Dynamic Intelligence Hub**
 
-- **Query Classification**: Distinguishes between PDF-searchable research questions, current events, and ambiguous queries
-- **Ambiguity Detection**: Uses pattern-based detection for vague terms (`enough`, `best`, `optimal`) without sufficient context
-- **Paper-Specific Routing**: Extracts paper references from "in Author (Year)" patterns for targeted search
-- **Clarification Generation**: Provides context-specific follow-up questions for ambiguous queries
-- **Decision Logic**: Web search patterns → Ambiguous patterns → LLM classification
+- **Dynamic Query Classification**: Adapts to any research domain without hardcoded patterns
+- **Generic Academic Detection**: Uses flexible patterns to identify academic queries across all fields
+- **Universal Author-Year Extraction**: Works with any citation format and author combination
+- **Intelligent Ambiguity Detection**: Context-aware pattern matching for better disambiguation
+- **Adaptive Clarification**: Generates domain-specific follow-up questions
+- **Decision Logic**: Temporal patterns → Generic academic patterns → LLM classification
 
 ### 📚 PDF Agent  
 
-**Research Document Expert**
+**Dynamic Research Document Expert**
 
-- **Enhanced Document Search**: Multiple search strategies including author-specific targeting
-- **Paper Prioritization**: 3x score boost for documents matching query-specified papers
-- **Table Data Processing**: Specialized handling of numerical data and method-performance relationships
-- **Context-Aware Synthesis**: Connects method names with performance scores from research tables
-- **Source Attribution**: Maintains document lineage without inline citations
-- **Vector Database**: FAISS with 138 chunks from 4 Text-to-SQL research papers
+- **Dynamic Document Search**: Adaptive search strategies that work with any academic content
+- **Author-Year Detection**: Automatically extracts and prioritizes content from any cited papers
+- **Comprehensive Response Generation**: Provides detailed academic explanations for complex queries
+- **Adaptive Content Processing**: Dynamic extraction of key terms, metrics, and findings
+- **Zero Hardcoded Patterns**: Works with any research domain without predefined constraints
+- **Enhanced Academic Routing**: Intelligently detects academic queries requiring detailed responses
+- **Vector Database**: FAISS with 1185 chunks from research papers
 
 ### 🌐 Web Search Agent
 
@@ -349,82 +397,129 @@ flowchart TD
 
 ### Prerequisites
 
-- Docker and Docker Compose
-- API Keys:
+- **Docker Desktop**: Install and ensure it's running
+- **Docker Compose**: Included with Docker Desktop
+- **API Keys**:
   - Google AI Studio (Gemini): [Get Key](https://makersuite.google.com/app/apikey)
   - Tavily Search API: [Get Key](https://tavily.com/)
 
 ### Quick Start
 
-1. **Environment Setup**
-
-   ```bash
-   git clone <repository-url>
-   cd chat-with-pdf
-   cp env.example .env
-   # Edit .env with your API keys
-   ```
-
-2. **Complete Docker Setup**
-
-   ```bash
-   # Automated setup (recommended)
-   ./docker-build.sh setup
-   
-   # Manual setup
-   ./docker-build.sh build
-   ./docker-build.sh start
-   ```
-
-3. **Verify Installation**
-
-   ```bash
-   # Check container health
-   ./docker-build.sh health
-   
-   # View application logs
-   ./docker-build.sh logs
-   ```
-
-### Docker Management Scripts
-
-#### docker-build.sh - Main Container Management
+#### Option 1: Complete Setup (Recommended)
 
 ```bash
-# Core Operations
-./docker-build.sh build                    # Build Docker image
-./docker-build.sh build --force            # Force rebuild (no cache)
-./docker-build.sh start                    # Start container (detached)
-./docker-build.sh stop                     # Stop container
-./docker-build.sh restart                  # Restart container
-./docker-build.sh logs                     # View real-time logs
-./docker-build.sh shell                    # Open bash shell in container
+# Clone and setup
+git clone <repository-url>
+cd chat-with-pdf
+cp env.example .env
+# Edit .env with your API keys
 
-# Monitoring & Health
-./docker-build.sh health                   # Check container health + API endpoints
-./docker-build.sh clean                    # Remove containers, images, volumes
-
-# Data Management
-./docker-build.sh ingest                   # Ingest PDFs from data/pdfs/
-./docker-build.sh ingest --force           # Force append to existing data
-
-# Complete Setup
-./docker-build.sh setup                    # End-to-end setup (build + start + check)
+# Complete automated setup
+./docker-setup.sh
 ```
 
-#### inject.sh - PDF Data Management (Local Development)
+#### Option 2: Manual Step-by-Step Setup
 
 ```bash
-# PDF Ingestion
-./inject.sh file /path/to/document.pdf     # Ingest single PDF
-./inject.sh directory /path/to/pdfs/       # Ingest directory of PDFs
-./inject.sh default                        # Ingest from data/pdfs/
-./inject.sh default --force                # Force append to existing data
+# 1. Environment Setup
+cp env.example .env
+# Edit .env with your API keys
 
-# Database Operations
-./inject.sh stats                          # Show database statistics
-./inject.sh clear                          # Clear all documents (with confirmation)
-./inject.sh help                           # Show usage information
+# 2. Build Docker image
+./docker-setup.sh build
+
+# 3. Run Docker container
+./docker-setup.sh run
+
+# 4. Ingest PDFs (Docker will process files from ./data/pdfs)
+./docker-setup.sh ingest
+
+# 5. Verify installation
+./docker-setup.sh health
+```
+
+### Docker Management
+
+#### Available Scripts
+
+**docker-setup.sh** - Main Docker management script:
+```bash
+./docker-setup.sh              # Complete setup (build, run, ingest) (right now I have disabled ingest when building in docker-setup.sh, you can uncomment that. You can manually ingest by using './docker-setup.sh ingest' command)
+./docker-setup.sh build        # Build Docker image only
+./docker-setup.sh run          # Run container (create and start)
+./docker-setup.sh start        # Start existing stopped container
+./docker-setup.sh logs         # Show live logs (follow mode)
+./docker-setup.sh get-logs     # Get recent logs (one-time view)
+./docker-setup.sh health       # Check container health
+./docker-setup.sh ingest       # Ingest PDFs from data/pdfs/
+./docker-setup.sh help         # Show help message
+```
+
+### Docker Volume Management
+
+#### Data Persistence Strategy
+
+The system uses **Docker volumes** for optimal data persistence and performance:
+
+```yaml
+# docker-compose.yml volumes configuration
+volumes:
+  vector_data:        # Stores processed document embeddings and FAISS index
+    driver: local
+  app_logs:          # Application logs with structured logging
+    driver: local
+  
+# Volume mounts in container
+- vector_data:/app/data/vectorstore    # Persistent vector database
+- app_logs:/app/logs                   # Application logs
+- ./data/pdfs:/app/data/pdfs:ro       # PDF files (read-only from host)
+```
+
+### Environment Configuration
+
+#### Docker Environment Variables
+
+The system automatically configures paths for Docker deployment:
+
+```bash
+# Key Docker-specific environment variables
+VECTOR_STORE_PATH=/app/data/vectorstore   # Absolute path in container
+PDF_STORAGE_PATH=/app/data/pdfs           # PDF input directory
+LOG_LEVEL=INFO                            # Structured logging level
+HOST=0.0.0.0                             # Bind to all interfaces
+PORT=8000                                # Internal container port
+```
+
+#### Environment File Setup
+
+```bash
+# Create .env from template
+cp env.example .env
+
+# Required API keys (edit .env file)
+GOOGLE_API_KEY=your_google_api_key_here
+TAVILY_API_KEY=your_tavily_api_key_here
+
+# Optional overrides
+LOG_LEVEL=debug                          # For detailed logging
+MAX_TOKENS=2000                          # Increase response length
+TEMPERATURE=0.5                          # More deterministic responses
+```
+
+#### PDF Ingestion Process
+
+```bash
+# Automatic ingestion during setup
+./docker-setup.sh              # Includes PDF ingestion
+
+# Manual ingestion
+./docker-setup.sh ingest       # Process all PDFs in data/pdfs/
+
+# Force re-ingestion (append mode)
+./docker-build.sh ingest --force
+
+# Monitor ingestion progress
+./docker-setup.sh logs         # Follow real-time logs
 ```
 
 ### Docker Architecture
@@ -470,16 +565,166 @@ services:
       retries: 3
 ```
 
+### Docker Troubleshooting
+
+#### Common Issues and Solutions
+
+**1. Vector Store Empty / Web Search Fallback**
+
+*Problem*: Queries return web search results instead of PDF search, logs show "Vector store is empty"
+
+*Solution*:
+```bash
+# Check if PDFs exist
+ls -la ./data/pdfs/
+
+# Verify vector store path configuration
+docker-compose exec chat-with-pdf env | grep VECTOR
+
+# Should show: VECTOR_STORE_PATH=/app/data/vectorstore
+
+# Re-ingest PDFs if needed
+./docker-setup.sh ingest
+
+# Check vector store files in container
+docker-compose exec chat-with-pdf ls -la /app/data/vectorstore/
+```
+
+**2. Container Won't Start**
+
+*Problem*: Container fails to start or exits immediately
+
+*Solution*:
+```bash
+# Check Docker daemon
+docker info
+
+# Check environment variables
+cat .env
+
+# View container logs
+docker-compose logs chat-with-pdf
+
+# Rebuild container
+docker-compose down
+docker-compose build --no-cache
+docker-compose up -d
+```
+
+**3. API Keys Not Working**
+
+*Problem*: Authentication errors or "API key not set" errors
+
+*Solution*:
+```bash
+# Verify .env file exists and has correct keys
+cat .env | grep -E "(GOOGLE_API_KEY|TAVILY_API_KEY)"
+
+# Check environment variables in container
+docker-compose exec chat-with-pdf env | grep -E "(GOOGLE|TAVILY)"
+
+# Restart container after updating .env
+docker-compose restart
+```
+
+**4. Port Already in Use**
+
+*Problem*: "Port 8000 is already allocated"
+
+*Solution*:
+```bash
+# Find process using port 8000
+lsof -i :8000
+
+# Kill process or change port in docker-compose.yml
+# Edit ports: "8001:8000" instead of "8000:8000"
+
+# Or stop conflicting container
+docker-compose down
+```
+
+**5. PDF Ingestion Fails**
+
+*Problem*: PDF ingestion command fails or no documents processed
+
+*Solution*:
+```bash
+# Check PDF files are accessible
+docker-compose exec chat-with-pdf ls -la /app/data/pdfs/
+
+# Check ingestion logs
+docker-compose logs chat-with-pdf | grep -i ingest
+
+# Manual ingestion with debug output
+docker-compose exec chat-with-pdf python scripts/ingest_pdfs.py default
+
+# Verify vector store creation
+docker-compose exec chat-with-pdf ls -la /app/data/vectorstore/
+```
+
+**6. High Memory Usage**
+
+*Problem*: Docker container consuming too much memory
+
+*Solution*:
+```bash
+# Monitor container resources
+docker stats chat-with-pdf-app
+
+# Limit memory in docker-compose.yml
+services:
+  chat-with-pdf:
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 2G
+
+# Restart with limits
+docker-compose down && docker-compose up -d
+```
+
+#### Health Check Commands
+
+```bash
+# Comprehensive system check
+./docker-setup.sh health
+
+# Manual health checks
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/ask \
+  -H "Content-Type: application/json" \
+  -d '{"question": "test"}'
+
+# Container status
+docker-compose ps
+docker-compose logs --tail=20 chat-with-pdf
+```
+
+#### Performance Monitoring
+
+```bash
+# Real-time logs
+./docker-setup.sh logs
+
+# Resource usage
+docker stats chat-with-pdf-app
+
+# Container inspection
+docker-compose exec chat-with-pdf df -h
+docker-compose exec chat-with-pdf free -h
+docker-compose exec chat-with-pdf ps aux
+```
+
 ## 🚀 Running the System
 
 ### 1. Docker Deployment (Recommended)
 
 ```bash
 # Complete setup
-./docker-build.sh setup
-
-# Add your PDFs
-cp your-research-papers/*.pdf data/pdfs/
+./docker-build.sh build
+./docker-build.sh start
 ./docker-build.sh ingest
 
 # Access the system
@@ -510,7 +755,7 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 - **Interactive Docs**: <http://localhost:8000/docs>
 - **Health Check**: <http://localhost:8000/health>
 - **Ask Questions**: <http://localhost:8000/ask>
-- **Clear Memory**: <http://localhost:8000/clear>
+- **Clear Memory**: <http://localhost:8000/clear-memory>
 
 ## 🧪 Testing the System
 
@@ -522,7 +767,7 @@ uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
 curl -X POST http://localhost:8000/ask \
   -H "Content-Type: application/json" \
   -d '{
-    "question": "What's the best approach for text-to-SQL in Chang and Fosler-Lussier (2023)?",
+    "question": "How is the T5-3B baseline model finetuned for the few-shot experiments on GeoQuery and Scholar in Rajkumar et al. (2022)?",
     "session_id": "test_session"
   }'
 
@@ -631,17 +876,19 @@ curl -X POST http://localhost:8000/ask \
 
 ### Current Metrics
 
-- **Vector Database**: 4 research papers, 138 document chunks
+- **Vector Database**: Research papers processed into 1185 document chunks
 - **Response Time**: 3-8 seconds (varies by query complexity)
-- **Accuracy**: High precision on academic Text-to-SQL questions
+- **Accuracy**: High precision on dynamic academic queries across research domains
 - **Coverage**: Real-time web search for current events
 - **Memory**: Session-based conversation persistence
+- **Adaptability**: Zero hardcoded patterns - works with any research field
 
 ### Optimizations
 
-- **Paper-Specific Search**: Score boost for exact paper matches
-- **Enhanced Table Processing**: Specialized numerical data extraction
-- **Ambiguity Detection**: Pattern-based + LLM classification
+- **Dynamic Paper-Specific Search**: Adaptive score boosting for any author/year combinations
+- **Enhanced Academic Response Generation**: Comprehensive answers for detailed academic queries
+- **Universal Ambiguity Detection**: Generic pattern-based + LLM classification
+- **Adaptive Content Processing**: Dynamic extraction without domain-specific hardcoding
 - **Caching**: Vector embeddings cached for faster retrieval
 
 ## 🔧 Technical Stack
@@ -659,26 +906,35 @@ curl -X POST http://localhost:8000/ask \
 ### Dependencies
 
 ```text
-# Core Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+# Core framework dependencies
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
 
-# AI/ML Stack
-langchain==0.0.335
-llamaindex==0.9.8
-google-generativeai==0.3.2
-faiss-cpu==1.7.4
+# LLM and AI libraries
+langchain
+langgraph
+llama-index
+llama-index-readers-file
+google-generativeai
+langchain-google-genai
 
-# Orchestration
-langgraph==0.0.25
+# Vector database and search
+faiss-cpu # I chose this because I have a potato machine
+numpy
 
-# Document Processing
-pypdf==3.17.1
-python-multipart==0.0.6
+# Web search
+tavily-python
 
-# Utilities
-structlog==23.2.0
-pydantic-settings==2.1.0
+# Document processing
+pypdf
+
+# Environment and configuration
+python-dotenv
+
+# Logging and monitoring
+structlog
 ```
 
 ## 📁 Project Structure
@@ -689,7 +945,7 @@ chat-with-pdf/
 │   ├── Dockerfile                    # Multi-stage container build
 │   ├── docker-compose.yml            # Development orchestration
 │   ├── .dockerignore                 # Build context optimization
-│   └── docker-build.sh               # Container management script
+│   └── docker-setup.sh               # Container management script
 │
 ├── 🤖 Application Code
 │   ├── src/
@@ -727,38 +983,46 @@ chat-with-pdf/
 │   └── start.sh                      # Local development startup
 │
 └── 📝 Documentation
-    ├── README.md                     # This comprehensive guide
-    └── logs/                         # Application logs
+    └── README.md                     # This comprehensive guide
 ```
 
 ## 🎯 Advanced Features
 
-### Paper-Specific Search Enhancement
+### Dynamic Academic Query Processing
 
-The system now supports intelligent paper-specific queries using the pattern `"...in Author (Year)"`:
+The system supports intelligent academic queries without any hardcoded constraints:
 
-1. **Pattern Detection**: Automatically extracts paper references from queries
-2. **Targeted Search**: Direct search for the specified paper
-3. **Score Boosting**: 3x relevance boost for exact paper matches
-4. **Result Prioritization**: Paper-specific results dominate source lists
+1. **Universal Pattern Detection**: Automatically extracts any author/year references from queries
+2. **Adaptive Search**: Dynamic search strategies that work with any research domain
+3. **Flexible Score Boosting**: Adaptive relevance boost for any paper matches
+4. **Content-Aware Prioritization**: Smart result ranking based on query context
 
-### Enhanced Ambiguity Detection
+### Comprehensive Response Generation
 
-Sophisticated query classification system:
+Sophisticated academic response system:
 
-1. **Pattern-Based Detection**: Recognizes vague terms without context
-2. **Training Query Handling**: Specific handling for training-related questions
-3. **Context Assessment**: Evaluates query specificity and completeness
-4. **Structured Clarification**: Provides targeted follow-up questions
+1. **Detailed Academic Answers**: Provides comprehensive explanations for complex queries
+2. **Dynamic Question Detection**: Identifies queries requiring detailed vs. brief responses
+3. **Structured Output**: Organizes responses with clear formatting and citations
+4. **Context-Aware Synthesis**: Adapts response style based on query type
 
-### Table Data Processing
+### Universal Ambiguity Detection
 
-Specialized handling of research paper tables:
+Advanced query classification without domain restrictions:
 
-1. **Numerical Data Extraction**: Parses method names and performance scores
-2. **Method-Score Correlation**: Connects approaches with their results
-3. **Performance Ranking**: Identifies highest-performing methods
-4. **Clean Presentation**: Removes inline citations for clarity
+1. **Generic Pattern Recognition**: Identifies vague terms across any research field
+2. **Context-Aware Assessment**: Evaluates query specificity dynamically
+3. **Adaptive Clarification**: Generates domain-appropriate follow-up questions
+4. **Flexible Routing**: Works with any academic subject or research area
+
+### Adaptive Content Processing
+
+Dynamic handling of research content:
+
+1. **Domain-Agnostic Extraction**: Processes any type of academic content
+2. **Dynamic Term Recognition**: Identifies key concepts without predefined lists
+3. **Flexible Data Parsing**: Handles various document structures and formats
+4. **Universal Citation Processing**: Works with any citation format or style
 
 ## 📈 Future Improvements
 

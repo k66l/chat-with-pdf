@@ -202,14 +202,12 @@ class RouterAgent:
             ]
 
             # Generic academic patterns
-            dataset_patterns = [r'\b[A-Z][a-z]*SQL\b',
-                                r'\bdataset\b', r'\bbenchmark\b']
+            dataset_patterns = [r'\bdataset\b', r'\bbenchmark\b', r'\bdata\b']
             model_patterns = [
-                r'\b(model|LLM|GPT|transformer)\b', r'\b[A-Z]+-\d+[BM]?\b']
-            metric_patterns = [r'\baccuracy\b', r'\bscore\b',
-                               r'\bF1\b', r'\bBLEU\b', r'\bROUGE\b']
-            task_patterns = [r'\btask\b', r'\bprompt\b',
-                             r'\btemplate\b', r'\btable\b', r'\bfigure\b']
+                r'\b(model|LLM|GPT|transformer|neural)\b', r'\b[A-Z]+-\d+[BM]?\b']
+            metric_patterns = [r'\b(accuracy|score|performance|metric|evaluation|result)\b',
+                               r'\bF1\b', r'\bBLEU\b', r'\bROUGE\b', r'\bRES\b']
+            task_patterns = [r'\b(task|prompt|template|table|figure|method|approach)\b']
 
             # Check for author patterns
             import re
@@ -253,21 +251,26 @@ class RouterAgent:
 
             # Temporal patterns for current events
             temporal_patterns = [
-                r'\b(this\s+(month|week|year))\b', r'\brecently?\b', r'\blatest\b',
+                r'\bthis\s+(month|week|year)\b', r'\brecently?\b', r'\blatest\b',
                 r'\bjust\s+(announced|released)\b', r'\bbreaking\b', r'\btoday\b',
-                r'\byesterday\b', r'\bcurrent\b', r'\bnow\b', r'\bupdate[sd]?\b'
+                r'\byesterday\b', r'\bcurrent\b', r'\bnow\b', r'\bupdate[sd]?\b',
+                r'\b(what|when)\s+(did|does|will)\s+.*\s+(release|announce|launch)\b',
+                r'\brelease\s+(this|last)\s+(year|month|week)\b',
+                r'\bannounce\s+(this|last)\s+(year|month|week)\b'
             ]
 
             # Company/commercial patterns
             company_patterns = [
                 r'\b(company|corp|corporation|inc|ltd)\b',
-                r'\b(startup|business|enterprise|firm)\b'
+                r'\b(startup|business|enterprise|firm)\b',
+                r'\b(Microsoft|Google|Apple|Amazon|Meta|OpenAI|Anthropic|IBM|Oracle|Adobe|Salesforce)\b'
             ]
 
             # Tech product patterns that might indicate current events
             tech_patterns = [
                 r'\b[A-Z][a-z]*GPT\b', r'\bClaude\b', r'\bBard\b',
-                r'\b(AI|ML)\s+(model|system|tool)\b'
+                r'\b(AI|ML)\s+(model|system|tool)\b',
+                r'\b(Office|Windows|Azure|AWS|iPhone|iPad|Chrome|Search)\b'
             ]
 
             # Academic context patterns that should NOT trigger web search
@@ -384,13 +387,21 @@ class RouterAgent:
 
             # Strong context patterns - if present, likely NOT ambiguous
             context_patterns = [
-                r'\b(dataset|benchmark|metric|paper)\b',
-                r'\b(accuracy|precision|recall|F1|BLEU|ROUGE)\b',
-                r'\b(spider|wikisql|cosql|bird)\b',
-                r'\bfor\s+(text-to-sql|sql|classification|nlp|spider|wikisql)\b',
-                r'\bon\s+(spider|wikisql|cosql|bird)\b',
-                r'\busing\s+(gpt|bert|transformer|neural)\b',
-                r'\bwith\s+(transformer|neural|deep)\b'
+                r'\b(dataset|benchmark|metric|paper|study|research|experiment|evaluation)\b',
+                r'\b(accuracy|precision|recall|F1|BLEU|ROUGE|score|performance|result)\b',
+                r'\bfor\s+(text-to-sql|sql|classification|nlp)\b',
+                r'\busing\s+(gpt|bert|transformer|neural|llm|model)\b',
+                r'\bwith\s+(transformer|neural|deep|machine|learning)\b',
+                r'\b[A-Z][a-z]+\s+et\s+al\.?\s*\(\d{4}\)',  # Author citations
+                r'\b[A-Z][a-z]+\s+et\s+al\.?\s*\d{4}',      # Author citations without parens
+                r'\bTable\s+\d+\b',                            # Table references
+                r'\bSection\s+\d+\b',                          # Section references
+                r'\bFigure\s+\d+\b',                           # Figure references
+                r'\bAppendix\s+[A-Z]\b',                        # Appendix references
+                r'\b\d{4}\)\b',                                # Year in parentheses
+                r'\btask\b.*\b(formulated|evaluation|assessment)\b',
+                r'\bmetric\b.*\b(introduced|defined|significance)\b',
+                r'\btemplate\b.*\b(format|comparison|performance)\b'
             ]
 
             # Check for all types of vague/ambiguous patterns

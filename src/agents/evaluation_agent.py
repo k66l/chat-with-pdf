@@ -179,13 +179,19 @@ class EvaluationAgent:
             Provide only a decimal score between 0.0 and 1.0:"""
 
             score_text = await llm_service.generate_simple_response(relevance_prompt)
+            
+            # Handle empty or error responses
+            if not score_text or score_text in ["Unable to generate response", "Error generating response"]:
+                logger.warning("LLM returned empty/error response for relevance evaluation")
+                return self._calculate_heuristic_relevance(question, answer)
+            
             match = re.search(r'(\d+\.?\d*)', score_text)
             if match:
                 score = float(match.group(1))
                 return min(max(score, 0.0), 1.0)
             else:
-                logger.warning("Could not extract score from relevance evaluation", score_text=score_text)
-                return 0.5
+                logger.warning("Could not extract score from relevance evaluation", score_text=score_text[:200])
+                return self._calculate_heuristic_relevance(question, answer)
 
         except Exception as e:
             logger.error("Error evaluating relevance", error=str(e))
@@ -210,13 +216,19 @@ class EvaluationAgent:
             Provide only a decimal score between 0.0 and 1.0:"""
 
             score_text = await llm_service.generate_simple_response(completeness_prompt)
+            
+            # Handle empty or error responses
+            if not score_text or score_text in ["Unable to generate response", "Error generating response"]:
+                logger.warning("LLM returned empty/error response for completeness evaluation")
+                return self._calculate_heuristic_completeness(question, answer, sources)
+            
             match = re.search(r'(\d+\.?\d*)', score_text)
             if match:
                 score = float(match.group(1))
                 return min(max(score, 0.0), 1.0)
             else:
-                logger.warning("Could not extract score from completeness evaluation", score_text=score_text)
-                return 0.5
+                logger.warning("Could not extract score from completeness evaluation", score_text=score_text[:200])
+                return self._calculate_heuristic_completeness(question, answer, sources)
 
         except Exception as e:
             logger.error("Error evaluating completeness", error=str(e))
@@ -458,6 +470,50 @@ class EvaluationAgent:
         except Exception as e:
             logger.error("Error getting evaluation statistics", error=str(e))
             return {'error': str(e)}
+
+    def _calculate_heuristic_relevance(self, question: str, answer: str) -> float:
+        """Calculate relevance score using heuristic methods when LLM fails."""
+        try:
+            if not answer or answer.strip() in ["Unable to generate response", "Error generating response", ""]:
+                return 0.1  # Low score for empty/error responses
+            
+            # Basic word overlap scoring
+            question_words = set(question.lower().split())
+            answer_words = set(answer.lower().split())
+            overlap = len(question_words.intersection(answer_words))
+            overlap_score = min(overlap / max(len(question_words), 1), 1.0)
+            
+            # Length penalty for very short answers
+            length_factor = min(len(answer) / 100, 1.0)  # Penalize answers shorter than 100 chars
+            
+            final_score = (overlap_score * 0.7 + length_factor * 0.3)
+            return min(max(final_score, 0.1), 0.8)  # Cap at 0.8 for heuristic
+            
+        except Exception as e:
+            logger.error("Error in heuristic relevance calculation", error=str(e))
+            return 0.5
+
+    def _calculate_heuristic_completeness(self, question: str, answer: str, sources: List[str]) -> float:
+        """Calculate completeness score using heuristic methods when LLM fails."""
+        try:
+            if not answer or answer.strip() in ["Unable to generate response", "Error generating response", ""]:
+                return 0.1  # Low score for empty/error responses
+            
+            # Base score from answer length
+            length_score = min(len(answer) / 500, 1.0)  # Normalize to 500 chars
+            
+            # Bonus for having sources
+            source_score = min(len(sources) / 5, 1.0)  # Up to 5 sources is good
+            
+            # Bonus for structured content (lists, numbers, etc.)
+            structure_bonus = 0.1 if any(marker in answer for marker in ['\n-', '\n1.', '\n•', ':', ';']) else 0
+            
+            final_score = (length_score * 0.5 + source_score * 0.3 + structure_bonus * 0.2)
+            return min(max(final_score, 0.1), 0.8)  # Cap at 0.8 for heuristic
+            
+        except Exception as e:
+            logger.error("Error in heuristic completeness calculation", error=str(e))
+            return 0.5
 
     def clear_evaluation_history(self) -> bool:
         """Clear evaluation history."""

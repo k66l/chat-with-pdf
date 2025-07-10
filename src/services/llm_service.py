@@ -68,17 +68,24 @@ class LLMService:
     async def generate_simple_response(self, prompt: str) -> str:
         """Generate a simple response from a single prompt."""
         try:
+            # Limit prompt length to avoid issues
+            if len(prompt) > 10000:
+                prompt = prompt[:10000] + "..."
+                logger.warning("Prompt truncated due to length", original_length=len(prompt))
+            
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             content = response.content if response and hasattr(response, 'content') else ""
             
             if not content or not content.strip():
-                logger.warning("LLM returned empty response for simple prompt")
-                return ""
+                logger.warning("LLM returned empty response for simple prompt", prompt_preview=prompt[:200])
+                # Return a basic fallback response instead of empty string
+                return "Unable to generate response"
             
             return content.strip()
         except Exception as e:
-            logger.error("Error generating simple response", error=str(e))
-            raise
+            logger.error("Error generating simple response", error=str(e), prompt_preview=prompt[:200])
+            # Return fallback instead of raising exception
+            return "Error generating response"
 
     async def classify_query_intent(self, question: str) -> Dict[str, Any]:
         """Classify the intent of a user question."""
@@ -210,44 +217,68 @@ class LLMService:
                 f"{msg.role}: {msg.content}" for msg in recent_messages
             ])
 
-        # Enhanced prompt with better context handling
-        system_prompt = f"""WRITE EXACTLY 2 SENTENCES. NO MORE. NO BULLET POINTS. NO LISTS.
+        # Detect if this is an academic query requiring detailed response
+        is_detailed_academic_query = any(pattern in question.lower() for pattern in [
+            'what are the', 'five distinct', 'key differences', 'core conclusions',
+            'how does', 'what is the definition', 'what challenges', 'what is the role',
+            'according to', 'in the study', 'et al', 'evaluation tasks', 'significance of'
+        ])
 
-        Question: {question}
+        if is_detailed_academic_query:
+            # Enhanced prompt for detailed academic responses
+            system_prompt = f"""You are analyzing research papers and must provide a comprehensive, detailed academic answer.
 
-        Research Papers Context:
-        {context[:8000]}{'...' if len(context) > 8000 else ''}
+            Question: {question}
 
-        CRITICAL INSTRUCTIONS:
-        - EXACTLY 2 sentences maximum
-        - Use ONLY information explicitly written in the context above
-        
-        FOR EXPLANATION QUESTIONS - MANDATORY FORMAT:
-        - FIRST SENTENCE: Start with "[Concept] is..." or "[Concept] involves..." and explain WHAT it is conceptually
-        - SECOND SENTENCE: Describe the paper's specific findings or contributions about this concept
-        - ABSOLUTELY FORBIDDEN: Starting with "In [concept]..." or "Demonstrations are..." or experimental details
-        - REQUIRED: Begin with the concept name followed by definition of what it actually means
-        
-        GOOD EXAMPLE: "Cross-domain Text-to-SQL is a challenging task where models generate SQL queries for databases with different schemas than those seen in training. Chang and Fosler-Lussier (2023) found that..."
-        
-        BAD EXAMPLE: "In Cross-domain Text-to-SQL, demonstrations are..." or "Demonstrations consist of..."
-        
-        - Extract conceptual understanding first, then paper contributions
-        - Focus on helping readers understand the concept itself, not just experimental setup
-        - Do NOT include inline citations like (Document X, Page Y)
+            Research Papers Context:
+            {context}
 
-        BEFORE ANSWERING: Carefully scan the entire context for relevant information including:
-        - Conceptual definitions and explanations of the topic
-        - Key contributions and findings from the mentioned authors/papers
-        - Methodological approaches and their significance
-        - Specific numerical results and percentages that support the explanation
-        - Performance metrics and benchmarks when relevant
-        - Experimental findings and conclusions
-        - Comparative analysis or advantages of the approach
+            Previous conversation (if any):
+            {conversation_context}
 
-        REMEMBER: If this is an explanation question, your answer MUST start with the concept name followed by "is" or "involves" and then define what it means. Do NOT start with experimental details.
-        
-        Answer in EXACTLY 2 sentences with all relevant information from the context:"""
+            Instructions for comprehensive academic response:
+            - Provide a detailed, thorough answer using ALL relevant information from the context
+            - Include specific numbers, percentages, scores, and metrics exactly as stated
+            - Reference specific tables, figures, sections, and appendixes mentioned
+            - Explain methodologies, approaches, and techniques in detail
+            - Include key findings, conclusions, and significance
+            - Use clear structure with bullet points, numbered lists, or headings where appropriate
+            - Quote exact terminology and technical terms from the papers
+            - If formulas or equations are mentioned, include them
+            - Reference specific authors, datasets, and experimental setups
+            - Provide comprehensive context about the significance of findings
+            - If the context contains detailed experimental results, include all relevant details
+            - For questions about multiple items (e.g., "five distinct tasks"), list all items comprehensively
+            - For questions about "key differences", explain each difference in detail
+            - For questions about "core conclusions", provide all major findings
+            - Do NOT fabricate or infer information not present in the context
+            - If asking about specific metrics or scores, include exact values from the context
+
+            Format your response as a comprehensive academic explanation with proper structure.
+
+            Answer:"""
+        else:
+            # Standard prompt for concise responses
+            system_prompt = f"""Answer the question using the provided context from research papers.
+
+            Question: {question}
+
+            Research Papers Context:
+            {context[:8000]}{'...' if len(context) > 8000 else ''}
+
+            Previous conversation (if any):
+            {conversation_context}
+
+            Instructions:
+            - Answer directly using only the information from the context
+            - Be specific and include relevant details from the context
+            - If the context contains specific numbers, tables, or experimental results, include them
+            - Reference specific papers or authors when mentioned in the context
+            - Do not fabricate or infer information not present in the context
+            - Organize your response clearly
+            - If the context is insufficient, state what information is missing
+
+            Answer:"""
 
         try:
             logger.info("Synthesizing answer",

@@ -193,7 +193,7 @@ class PDFAgent:
             # Check if this is a numerical/table query
             is_numerical_query = any(term in question.lower() for term in [
                 'percentage', 'percent', '%', 'accuracy', 'score', 'number', 'value',
-                'execution', 'exact match', 'f1', 'table', 'figure', 'data'
+                'execution', 'exact match', 'f1', 'table', 'figure', 'data', 'metric', 'result'
             ]) or any(char.isdigit() for char in question)
 
             # Check for error analysis queries specifically
@@ -388,10 +388,11 @@ class PDFAgent:
                     question_words = question.lower().split()
 
                     # Add relevant nouns and technical terms from the question
-                    technical_terms = ['template', 'accuracy',
-                                       'performance', 'method', 'approach', 'model']
                     for word in question_words:
-                        if word in technical_terms or word.endswith('ing') or word.endswith('ed'):
+                        if (len(word) > 3 and 
+                            (word.endswith('ing') or word.endswith('ed') or word.endswith('ion') or 
+                             word.endswith('tion') or word.endswith('ment') or word.endswith('ness') or
+                             word.endswith('ity') or word.endswith('ism') or word.endswith('ics'))):
                             key_terms.append(word)
 
                     # Add any numbers found in the question
@@ -399,16 +400,16 @@ class PDFAgent:
                         if any(char.isdigit() for char in word):
                             key_terms.append(word)
 
-                    # Add specific error analysis terms if mentioned
-                    error_analysis_terms = [
-                        'error', 'analysis', 'failure', 'mistake', 'incorrect', 'wrong', 'limitation', 'challenge']
+                    # Add domain-specific terms dynamically
+                    domain_terms = []
                     for word in question_words:
-                        if word in error_analysis_terms:
-                            key_terms.append(word)
-                            # Also add common error analysis combinations
-                            if word == 'error' or word == 'analysis':
-                                key_terms.extend(
-                                    ['error analysis', 'failure analysis', 'error patterns'])
+                        if (len(word) > 4 and 
+                            (word.endswith('sql') or word.endswith('llm') or word.endswith('gpt') or
+                             word in ['evaluation', 'metric', 'score', 'performance', 'analysis', 
+                                      'template', 'method', 'approach', 'task', 'dataset', 'benchmark'])):
+                            domain_terms.append(word)
+                    
+                    key_terms.extend(domain_terms)
 
                     for term in key_terms:
                         term_docs = await self.search_documents(term, top_k=8, score_threshold=0.05)
@@ -426,49 +427,60 @@ class PDFAgent:
                     docs.extend(targeted_docs)
 
             # Enhanced search for comparative or performance-related content
-            comparative_terms = ['highest', 'best', 'optimal',
-                                 'superior', 'maximum', 'compare', 'comparison']
+            comparative_terms = ['highest', 'best', 'optimal', 'superior', 'maximum', 'compare', 'comparison']
             if any(term in question.lower() for term in comparative_terms):
-                # Search for tables and figures that might contain comparative data
-                for table_num in range(1, 6):  # Search tables 1-5
+                # Search for tables and figures dynamically based on question content
+                table_refs = re.findall(r'table\s+(\d+)', question.lower())
+                figure_refs = re.findall(r'figure\s+(\d+)', question.lower())
+                
+                # Search for specific tables/figures mentioned
+                for table_num in table_refs:
                     table_docs = await self.search_documents(f'Table {table_num}', top_k=5, score_threshold=0.05)
                     docs.extend(table_docs)
+                
+                for figure_num in figure_refs:
+                    figure_docs = await self.search_documents(f'Figure {figure_num}', top_k=5, score_threshold=0.05)
+                    docs.extend(figure_docs)
+                
+                # If no specific tables mentioned, search general table/figure content
+                if not table_refs and not figure_refs:
+                    for table_num in range(1, 6):  # Default search for tables 1-5
+                        table_docs = await self.search_documents(f'Table {table_num}', top_k=3, score_threshold=0.05)
+                        docs.extend(table_docs)
 
-                # Search for performance-related terms
-                performance_terms = [
-                    'outperforms', 'performance', 'results', 'comparison', 'evaluation']
-                for term in performance_terms:
-                    if term in question.lower():
-                        perf_docs = await self.search_documents(term, top_k=6, score_threshold=0.05)
-                        docs.extend(perf_docs)
-                        logger.info(f"Added {len(perf_docs)} {term} documents")
+                # Search for performance-related terms found in the question
+                performance_words = [word for word in question.lower().split() 
+                                   if word in ['outperforms', 'performance', 'results', 'comparison', 'evaluation', 'metric', 'score']]
+                for term in performance_words:
+                    perf_docs = await self.search_documents(term, top_k=6, score_threshold=0.05)
+                    docs.extend(perf_docs)
+                    logger.info(f"Added {len(perf_docs)} {term} documents")
 
             # Enhanced search for table-specific content
             if any(term in question.lower() for term in ['table', 'figure', 'data', 'results', 'percentage', '%']):
-                # Search for table chunks specifically
-                table_docs = await self.search_documents('TABLE DATA', top_k=8, score_threshold=0.05)
+                # Search for table chunks using dynamic content markers
+                table_docs = await self.search_documents('TABLE', top_k=8, score_threshold=0.05)
                 docs.extend(table_docs)
                 logger.info(f"Added {len(table_docs)} table-related documents")
 
             # Enhanced search for numerical data
-            numerical_terms = ['percentage', '%', 'accuracy',
-                               'score', 'number', 'value', 'result']
+            numerical_terms = ['percentage', '%', 'accuracy', 'score', 'number', 'value', 'result']
             has_numbers = any(char.isdigit() for char in question)
 
             if any(term in question.lower() for term in numerical_terms) or has_numbers:
-                # Search for numerical chunks specifically
-                numerical_docs = await self.search_documents('NUMERICAL DATA', top_k=8, score_threshold=0.05)
+                # Search for numerical data using general terms
+                numerical_docs = await self.search_documents('score', top_k=4, score_threshold=0.05)
                 docs.extend(numerical_docs)
-                logger.info(
-                    f"Added {len(numerical_docs)} numerical data documents")
+                metric_docs = await self.search_documents('metric', top_k=4, score_threshold=0.05)
+                docs.extend(metric_docs)
+                logger.info(f"Added {len(numerical_docs + metric_docs)} numerical data documents")
 
                 # Extract numbers from the question and search for them
                 numbers = re.findall(r'\d+\.?\d*', question)
                 for number in numbers:
                     number_docs = await self.search_documents(number, top_k=5, score_threshold=0.05)
                     docs.extend(number_docs)
-                    logger.info(
-                        f"Added {len(number_docs)} documents for number {number}")
+                    logger.info(f"Added {len(number_docs)} documents for number {number}")
 
             # Remove duplicates based on content (keep highest scoring version)
             seen_content = {}
