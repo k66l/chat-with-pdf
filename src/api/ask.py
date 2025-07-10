@@ -1,10 +1,12 @@
 """Ask endpoint for question-answering functionality."""
 
 import uuid
+import re
 import structlog
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
-from ..core.models import QuestionRequest, QuestionResponse
+from ..core.models import QuestionRequest, QuestionResponse, SessionValidationError
 from ..agents.orchestrator import orchestrator
 from ..agents.memory_agent import memory_agent
 
@@ -18,12 +20,30 @@ def generate_session_id() -> str:
     return f"sess_{uuid.uuid4().hex[:12]}"
 
 
+def validate_session_id(session_id: str) -> bool:
+    """Validate session ID format."""
+    pattern = r"^sess_[a-f0-9]{12}$"
+    return bool(re.match(pattern, session_id))
+
+
 @router.post("/ask", response_model=QuestionResponse)
 async def ask_question(request: QuestionRequest):
     """Ask a question to the multi-agent system."""
     try:
-        # Handle session ID logic
+        # Handle session ID validation and logic
         if request.session_id:
+            # Validate session ID format
+            if not validate_session_id(request.session_id):
+                logger.warning("Invalid session ID format", session_id=request.session_id)
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": "invalid_session_id",
+                        "message": f"Session ID '{request.session_id}' has invalid format. Must match pattern: sess_[12-character-hex]",
+                        "valid_format": "sess_[12-character-hex]"
+                    }
+                )
+            
             # Use provided session ID
             session_id = request.session_id
             is_new_session = False
@@ -31,11 +51,15 @@ async def ask_question(request: QuestionRequest):
             # Check if session exists
             session_stats = memory_agent.get_session_stats(session_id)
             if not session_stats['exists']:
-                # Session ID provided but doesn't exist - treat as new
-                is_new_session = True
-                logger.info(
-                    "Session ID provided but doesn't exist, treating as new session",
-                    provided_session_id=session_id
+                # Session ID provided but doesn't exist - return error
+                logger.warning("Session ID not found", session_id=session_id)
+                raise HTTPException(
+                    status_code=404,
+                    detail={
+                        "error": "session_not_found",
+                        "message": f"Session '{session_id}' not found. Use POST /ask without session_id to create a new session.",
+                        "valid_format": "sess_[12-character-hex]"
+                    }
                 )
         else:
             # Generate new session ID

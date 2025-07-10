@@ -11,6 +11,7 @@ class QueryType(str, Enum):
     PDF_SEARCH = "pdf_search"
     WEB_SEARCH = "web_search"
     AMBIGUOUS = "ambiguous"
+    OUT_OF_SCOPE = "out_of_scope"
 
 
 class ChatMessage(BaseModel):
@@ -28,7 +29,8 @@ class QuestionRequest(BaseModel):
     question: str = Field(..., min_length=1, description="The question to ask")
     session_id: Optional[str] = Field(
         default=None,
-        description="Optional session ID for conversation continuity. If not provided, a new session will be created."
+        description="Optional session ID for conversation continuity. If not provided, a new session will be created.",
+        pattern=r"^sess_[a-f0-9]{12}$"
     )
 
 
@@ -114,3 +116,10 @@ class RouterDecision(BaseModel):
     reasoning: str = Field(..., description="Reasoning behind the decision")
     requires_clarification: bool = Field(
         default=False, description="Whether query needs clarification")
+
+
+class SessionValidationError(BaseModel):
+    """Error response for invalid session IDs."""
+    error: str = Field(..., description="Error type")
+    message: str = Field(..., description="Error description")
+    valid_format: str = Field(default="sess_[12-character-hex]", description="Expected session ID format")

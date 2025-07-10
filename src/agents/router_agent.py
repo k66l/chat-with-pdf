@@ -67,7 +67,8 @@ class RouterAgent:
             query_type_map = {
                 "pdf_search": QueryType.PDF_SEARCH,
                 "web_search": QueryType.WEB_SEARCH,
-                "ambiguous": QueryType.AMBIGUOUS
+                "ambiguous": QueryType.AMBIGUOUS,
+                "out_of_scope": QueryType.OUT_OF_SCOPE
             }
 
             query_type = query_type_map.get(

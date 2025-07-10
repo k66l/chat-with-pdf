@@ -102,16 +102,15 @@ class PDFAgent:
                 processed_content = self._enhance_table_content(
                     content, question)
 
-                # Add document context
-                source_info = f"{metadata.get('source', 'Unknown')} (Page {metadata.get('page', 'N/A')})"
-                context_parts.append(
-                    f"Document {i+1} ({source_info}):\n{processed_content}")
+                # Add document context WITHOUT inline source references
+                context_parts.append(processed_content)
 
-                # Track unique sources
+                # Track unique sources separately
+                source_info = f"{metadata.get('source', 'Unknown')} (Page {metadata.get('page', 'N/A')})"
                 if source_info not in sources:
                     sources.append(source_info)
 
-            # Combine context
+            # Combine context (clean, without inline references)
             context = "\n\n".join(context_parts)
 
             # Generate answer using LLM with enhanced prompt for numerical data
@@ -589,14 +588,16 @@ class PDFAgent:
                         current_length += len(content)
                     break
 
+                # Add content without inline source references
                 context_parts.append(content)
                 current_length += len(content)
 
-                # Track sources
+                # Track sources separately
                 source_info = f"{metadata.get('source', 'Unknown')} (Page {metadata.get('page', 'N/A')})"
                 if source_info not in sources:
                     sources.append(source_info)
 
+            # Clean context without inline references
             context = "\n\n".join(context_parts)
 
             logger.info(

@@ -72,6 +72,8 @@ class AgentOrchestrator:
             workflow.add_node("handle_web_search",
                               self._handle_web_search_node)
             workflow.add_node("handle_ambiguous", self._handle_ambiguous_node)
+            workflow.add_node("handle_out_of_scope",
+                              self._handle_out_of_scope_node)
             workflow.add_node("finalize_response",
                               self._finalize_response_node)
 
@@ -85,7 +87,8 @@ class AgentOrchestrator:
                 {
                     "pdf_search": "handle_pdf_search",
                     "web_search": "handle_web_search",
-                    "ambiguous": "handle_ambiguous"
+                    "ambiguous": "handle_ambiguous",
+                    "out_of_scope": "handle_out_of_scope"
                 }
             )
 
@@ -93,6 +96,7 @@ class AgentOrchestrator:
             workflow.add_edge("handle_pdf_search", "finalize_response")
             workflow.add_edge("handle_web_search", "finalize_response")
             workflow.add_edge("handle_ambiguous", "finalize_response")
+            workflow.add_edge("handle_out_of_scope", "finalize_response")
 
             # End the workflow
             workflow.add_edge("finalize_response", END)
@@ -138,8 +142,12 @@ class AgentOrchestrator:
         try:
             logger.info("Handling PDF search", session_id=state.session_id)
 
-            # Get chat history
-            chat_history = memory_agent.get_chat_history(state.session_id)
+            # Get chat history (skip if new session to optimize performance)
+            session_stats = memory_agent.get_session_stats(state.session_id)
+            if session_stats['exists'] and session_stats['message_count'] > 0:
+                chat_history = memory_agent.get_chat_history(state.session_id)
+            else:
+                chat_history = []  # Empty history for new sessions
 
             # Perform PDF search
             answer, sources, confidence = await pdf_agent.answer_question(
@@ -194,8 +202,12 @@ class AgentOrchestrator:
         try:
             logger.info("Handling web search", session_id=state.session_id)
 
-            # Get chat history
-            chat_history = memory_agent.get_chat_history(state.session_id)
+            # Get chat history (skip if new session to optimize performance)
+            session_stats = memory_agent.get_session_stats(state.session_id)
+            if session_stats['exists'] and session_stats['message_count'] > 0:
+                chat_history = memory_agent.get_chat_history(state.session_id)
+            else:
+                chat_history = []  # Empty history for new sessions
 
             # Perform web search
             answer, sources, confidence = await web_search_agent.answer_question(
@@ -239,6 +251,37 @@ class AgentOrchestrator:
             state.error = f"Ambiguous query handling error: {str(e)}"
             return state
 
+    async def _handle_out_of_scope_node(self, state: AgentState) -> AgentState:
+        """Handle out-of-scope queries."""
+        try:
+            logger.info("Handling out-of-scope query",
+                        session_id=state.session_id)
+
+            # Standard out-of-scope response
+            out_of_scope_response = """I'm a specialized assistant for academic research papers about Text-to-SQL and related AI/ML topics. Your question appears to be outside my domain of expertise.
+
+            I can help you with:
+            - Text-to-SQL research methods and techniques
+            - Academic paper analysis and findings
+            - Database query generation approaches
+            - AI/ML model performance comparisons
+            - Current AI/ML research and developments
+
+            Please ask a question related to these topics, and I'll be happy to help!"""
+
+            # Update state
+            state.final_answer = out_of_scope_response
+            state.sources = []
+            state.confidence = 0.8  # High confidence that it's out of scope
+
+            logger.info("Out-of-scope query handled")
+            return state
+
+        except Exception as e:
+            logger.error("Error in handle_out_of_scope_node", error=str(e))
+            state.error = f"Out-of-scope query handling error: {str(e)}"
+            return state
+
     async def _finalize_response_node(self, state: AgentState) -> AgentState:
         """Finalize the response and update memory."""
         try:
@@ -251,7 +294,14 @@ class AgentOrchestrator:
 
             # Evaluate the answer quality using the Evaluation Agent
             if state.final_answer and state.query_type:
-                chat_history = memory_agent.get_chat_history(state.session_id)
+                # Get chat history (skip if new session to optimize performance)
+                session_stats = memory_agent.get_session_stats(
+                    state.session_id)
+                if session_stats['exists'] and session_stats['message_count'] > 0:
+                    chat_history = memory_agent.get_chat_history(
+                        state.session_id)
+                else:
+                    chat_history = []  # Empty history for new sessions
 
                 evaluation_result = await evaluation_agent.evaluate_answer(
                     question=state.question,
@@ -305,6 +355,8 @@ class AgentOrchestrator:
             return "web_search"
         elif state.query_type == QueryType.AMBIGUOUS:
             return "ambiguous"
+        elif state.query_type == QueryType.OUT_OF_SCOPE:
+            return "out_of_scope"
         else:
             # Default to PDF search
             return "pdf_search"

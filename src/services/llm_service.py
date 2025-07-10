@@ -112,6 +112,15 @@ class LLMService:
         - Information that changes frequently or is time-sensitive
         - Questions about release dates, launch dates, availability dates
 
+        OUT_OF_SCOPE (use when question is about):
+        - Programming languages, code syntax, debugging (Python, JavaScript, etc.)
+        - Non-academic topics (cooking, sports, entertainment, personal advice)
+        - Medical or health advice
+        - Legal advice or financial recommendations
+        - Questions requiring specialized knowledge outside of AI/ML research
+        - Personal opinions or subjective preferences
+        - Questions that are clearly outside the research domain
+
         AMBIGUOUS (use when):
         - Question contains vague terms WITHOUT specific context:
           * "enough" (without specifying for what purpose/dataset)
@@ -157,7 +166,7 @@ class LLMService:
 
         Respond in JSON format:
         {
-            "query_type": "pdf_search|web_search|ambiguous",
+            "query_type": "pdf_search|web_search|ambiguous|out_of_scope",
             "confidence": 0.0-1.0,
             "reasoning": "explanation",
             "requires_clarification": true/false
