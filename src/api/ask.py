@@ -105,6 +105,9 @@ async def ask_question(request: QuestionRequest):
 
         return enhanced_response
 
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404, 400) without modification
+        raise
     except Exception as e:
         logger.error("Error processing question", error=str(e))
         raise HTTPException(

@@ -13,10 +13,9 @@ It intelligently routes user queries to either:
 …and handles:
 
 - Ambiguous questions with clarification
-- Paper-specific targeting (e.g., “in Zhang et al. (2024)”)
 - Multi-turn memory via isolated session management
 
-No UI required — just clean architecture, modular code, and Dockerized deployment.
+Clean architecture, modular code, and Dockerized deployment.
 
 ## 📄 Document Chunking Strategy
 
@@ -640,7 +639,7 @@ curl -X POST http://localhost:8000/ask \
 
 ### Optimizations
 
-- **Paper-Specific Search**: 3x score boost for exact paper matches
+- **Paper-Specific Search**: Score boost for exact paper matches
 - **Enhanced Table Processing**: Specialized numerical data extraction
 - **Ambiguity Detection**: Pattern-based + LLM classification
 - **Caching**: Vector embeddings cached for faster retrieval
