@@ -443,6 +443,7 @@ cp env.example .env
 #### Available Scripts
 
 **docker-setup.sh** - Main Docker management script:
+
 ```bash
 ./docker-setup.sh              # Complete setup (build, run, ingest) (right now I have disabled ingest when building in docker-setup.sh, you can uncomment that. You can manually ingest by using './docker-setup.sh ingest' command)
 ./docker-setup.sh build        # Build Docker image only
@@ -574,6 +575,7 @@ services:
 *Problem*: Queries return web search results instead of PDF search, logs show "Vector store is empty"
 
 *Solution*:
+
 ```bash
 # Check if PDFs exist
 ls -la ./data/pdfs/
@@ -595,6 +597,7 @@ docker-compose exec chat-with-pdf ls -la /app/data/vectorstore/
 *Problem*: Container fails to start or exits immediately
 
 *Solution*:
+
 ```bash
 # Check Docker daemon
 docker info
@@ -616,6 +619,7 @@ docker-compose up -d
 *Problem*: Authentication errors or "API key not set" errors
 
 *Solution*:
+
 ```bash
 # Verify .env file exists and has correct keys
 cat .env | grep -E "(GOOGLE_API_KEY|TAVILY_API_KEY)"
@@ -632,6 +636,7 @@ docker-compose restart
 *Problem*: "Port 8000 is already allocated"
 
 *Solution*:
+
 ```bash
 # Find process using port 8000
 lsof -i :8000
@@ -648,6 +653,7 @@ docker-compose down
 *Problem*: PDF ingestion command fails or no documents processed
 
 *Solution*:
+
 ```bash
 # Check PDF files are accessible
 docker-compose exec chat-with-pdf ls -la /app/data/pdfs/
@@ -667,6 +673,7 @@ docker-compose exec chat-with-pdf ls -la /app/data/vectorstore/
 *Problem*: Docker container consuming too much memory
 
 *Solution*:
+
 ```bash
 # Monitor container resources
 docker stats chat-with-pdf-app
@@ -1027,24 +1034,28 @@ Dynamic handling of research content:
 ## 📈 Future Improvements
 
 ### 🚀 Scalability & Performance
+
 - **Multi-User Scalability**: Add persistent memory store (Redis or Postgres) for concurrent users
 - **Advanced Chunking**: Implement hybrid chunking strategies (semantic + domain-specific)
 - **Caching Layer**: Add Redis caching for frequently accessed documents and embeddings
 - **Async Processing**: Implement background PDF processing with queue system
 
 ### 🎯 Intelligence & Accuracy
+
 - **LLM Flexibility**: Support multiple LLM backends (Anthropic Claude, Mistral, OpenAI, etc.)
 - **Knowledge Graph Integration**: Augment document retrieval with lightweight KG over entity mentions
 - **Query Expansion**: Implement automatic query expansion using synonyms and related terms
 - **Cross-Reference Detection**: Identify and link related content across different papers
 
 ### 🔧 Automation & Integration
+
 - **Automatic PDF Ingestion**: Enable dynamic paper fetching (e.g., via arXiv API or citation graph)
 - **Frontend UI**: Integrate a Streamlit or React frontend for user-friendly interaction
 - **API Gateway**: Add API rate limiting, authentication, and monitoring
 - **Webhook Integration**: Support real-time document updates and notifications
 
 ### 📊 Testing & Evaluation
+
 - **Evaluation Pipeline**: Add test harness using golden Q&A pairs with scoring metrics (F1, BLEU, etc.)
 - **A/B Testing**: Implement framework for testing different chunking and retrieval strategies
 - **Performance Monitoring**: Add comprehensive metrics and alerting system
@@ -1053,24 +1064,28 @@ Dynamic handling of research content:
 ## ⚠️ Known Limitations
 
 ### 🗂️ Document Processing
+
 - **Scalability**: Optimized for a small corpus (4 papers); vector index and chunking may need tuning for larger datasets
 - **Chunk Size Sensitivity**: 500-token chunks work for current PDFs but may need adjustment for others (e.g., code-heavy or image-heavy docs)
 - **Semantic Threshold**: Fixed threshold (0.7) may not be optimal for all document types and domains
 - **Table Detection**: Basic pattern matching for tables; complex layouts may be missed
 
 ### 🤖 Agent Intelligence
+
 - **Ambiguity Detection**: Uses simple patterns and LLM prompts; not fine-tuned for edge cases
 - **Clarification Logic**: Limited fallback if clarification fails (e.g., vague query without LLM classification)
 - **Context Window**: Limited conversation history due to token constraints
 - **Query Understanding**: May struggle with very domain-specific technical terminology
 
 ### 🔍 Search & Retrieval
+
 - **Vector Search**: FAISS is CPU-based; GPU acceleration could improve performance
 - **Embedding Model**: Fixed to Google's model; may not be optimal for all academic domains
 - **Score Calibration**: Similarity thresholds may need domain-specific tuning
 - **Cross-Document Relationships**: Limited ability to connect information across different papers
 
 ### 📊 Evaluation & Testing
+
 - **Evaluation**: Currently lacks automated validation/testing framework beyond manual query testing
 - **Metrics**: No comprehensive evaluation metrics for chunking quality and retrieval accuracy
 - **Benchmarking**: No standardized benchmarks for comparing different configurations
