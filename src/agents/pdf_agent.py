@@ -252,7 +252,17 @@ class PDFAgent:
 
                 Format: Present the documented findings using only the data explicitly provided in the context."""
 
-                return await llm_service.generate_simple_response(enhanced_prompt)
+                response = await llm_service.generate_simple_response(enhanced_prompt)
+                if not response or not response.strip():
+                    logger.warning("Empty response from LLM for prompt accuracy query")
+                    # Fallback to standard answer generation
+                    return await llm_service.synthesize_answer(
+                        question=question,
+                        context=context,
+                        sources=sources,
+                        chat_history=chat_history
+                    )
+                return response
 
             elif is_numerical_query:
                 # Conservative prompt for numerical data
@@ -274,7 +284,17 @@ class PDFAgent:
                 
                 Format: Provide a very brief 1-2 sentence summary."""
 
-                return await llm_service.generate_simple_response(enhanced_prompt)
+                response = await llm_service.generate_simple_response(enhanced_prompt)
+                if not response or not response.strip():
+                    logger.warning("Empty response from LLM for numerical query")
+                    # Fallback to standard answer generation
+                    return await llm_service.synthesize_answer(
+                        question=question,
+                        context=context,
+                        sources=sources,
+                        chat_history=chat_history
+                    )
+                return response
             else:
                 # Standard answer generation
                 return await llm_service.synthesize_answer(

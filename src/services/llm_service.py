@@ -69,7 +69,13 @@ class LLMService:
         """Generate a simple response from a single prompt."""
         try:
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
-            return response.content
+            content = response.content if response and hasattr(response, 'content') else ""
+            
+            if not content or not content.strip():
+                logger.warning("LLM returned empty response for simple prompt")
+                return ""
+            
+            return content.strip()
         except Exception as e:
             logger.error("Error generating simple response", error=str(e))
             raise
@@ -203,32 +209,36 @@ class LLMService:
         Research Papers Context:
         {context[:8000]}{'...' if len(context) > 8000 else ''}
 
-        STRICT REQUIREMENTS:
+        CRITICAL INSTRUCTIONS:
         - EXACTLY 2 sentences maximum
-        - NO bullet points, NO lists, NO detailed breakdowns
-        - Use only information explicitly written in the context
-        - Do NOT create percentages or statistics not in the text
-        - Be direct and concise
-        - Provide a clear, direct answer based on the papers
-        - When specific authors/papers are mentioned in the question, prioritize content from those papers
-        - Look for detailed information about the requested topic (methods, analysis, findings, etc.)
-        - If the question asks about specific sections (error analysis, methodology, results), focus on those aspects
-        - For error analysis queries, report only the specific failure cases, limitations, and error patterns that are explicitly documented in the context
-        - Extract and present relevant details even if they appear in different sections or contexts
-        - Look for comparative statements like "consistently outperforms", "achieves optimal performance", "best evaluation performance"
+        - Use ONLY information explicitly written in the context above
+        
+        FOR EXPLANATION QUESTIONS - MANDATORY FORMAT:
+        - FIRST SENTENCE: Start with "[Concept] is..." or "[Concept] involves..." and explain WHAT it is conceptually
+        - SECOND SENTENCE: Describe the paper's specific findings or contributions about this concept
+        - ABSOLUTELY FORBIDDEN: Starting with "In [concept]..." or "Demonstrations are..." or experimental details
+        - REQUIRED: Begin with the concept name followed by definition of what it actually means
+        
+        GOOD EXAMPLE: "Cross-domain Text-to-SQL is a challenging task where models generate SQL queries for databases with different schemas than those seen in training. Chang and Fosler-Lussier (2023) found that..."
+        
+        BAD EXAMPLE: "In Cross-domain Text-to-SQL, demonstrations are..." or "Demonstrations consist of..."
+        
+        - Extract conceptual understanding first, then paper contributions
+        - Focus on helping readers understand the concept itself, not just experimental setup
         - Do NOT include inline citations like (Document X, Page Y)
-        - Be direct and confident in presenting the findings that are explicitly documented
-        - Do NOT claim information is missing if relevant content exists in the provided context
-        - CRITICAL: Do NOT generate, calculate, or infer any percentages, numerical breakdowns, or specific categorizations not explicitly written in the context
-        - NEVER create fake statistics like "25.2% Semantic Incorrect" or "14 E%" unless these exact numbers appear in the provided text
-        - Search thoroughly through all provided context before concluding anything is missing
-        - Be concise and informative, using ONLY documented information from the context
-        - DO NOT include inline source citations (like "Author et al. - Year, Page X") in your answer
-        - The sources will be provided separately, so focus only on the content
-        - If detailed numerical breakdowns are requested but not present, describe general findings without fabricating specific numbers
-        - For error analysis: give only the main finding in 1-2 sentences, do NOT list multiple error types or examples
 
-        Answer in EXACTLY 2 sentences:"""
+        BEFORE ANSWERING: Carefully scan the entire context for relevant information including:
+        - Conceptual definitions and explanations of the topic
+        - Key contributions and findings from the mentioned authors/papers
+        - Methodological approaches and their significance
+        - Specific numerical results and percentages that support the explanation
+        - Performance metrics and benchmarks when relevant
+        - Experimental findings and conclusions
+        - Comparative analysis or advantages of the approach
+
+        REMEMBER: If this is an explanation question, your answer MUST start with the concept name followed by "is" or "involves" and then define what it means. Do NOT start with experimental details.
+        
+        Answer in EXACTLY 2 sentences with all relevant information from the context:"""
 
         try:
             logger.info("Synthesizing answer",

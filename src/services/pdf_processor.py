@@ -5,10 +5,14 @@ import re
 from typing import List, Dict, Any
 import structlog
 from pathlib import Path
+import numpy as np
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
 
-from llama_index.core import SimpleDirectoryReader, Document
+from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 import pypdf
+from langchain_google_genai import GoogleGenerativeAIEmbeddings
 
 from ..core.config import settings
 from ..core.models import DocumentChunk
@@ -18,25 +22,179 @@ logger = structlog.get_logger(__name__)
 
 
 class PDFProcessorService:
-    """Service for processing PDF documents."""
+    """Service for processing PDF documents with semantic chunking."""
 
     def __init__(self):
         """Initialize the PDF processor service."""
         self.pdf_storage_path = settings.pdf_storage_path
         self.chunk_size = settings.chunk_size
         self.chunk_overlap = settings.chunk_overlap
+        self.semantic_threshold = 0.7  # Cosine similarity threshold for semantic chunking
 
-        # Initialize text splitter with better settings for tables
+        # Initialize text splitter for fallback
         self.text_splitter = SentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap
         )
 
-        logger.info(
-            "PDF processor service initialized",
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap
+        # Initialize embedding model for semantic chunking
+        self.embedding_model = GoogleGenerativeAIEmbeddings(
+            model="models/text-embedding-004",
+            google_api_key=settings.google_api_key
         )
+
+        logger.info(
+            "PDF processor service initialized with semantic chunking",
+            chunk_size=self.chunk_size,
+            chunk_overlap=self.chunk_overlap,
+            semantic_threshold=self.semantic_threshold
+        )
+
+    def _split_into_sentences(self, text: str) -> List[str]:
+        """Split text into sentences for semantic analysis."""
+        try:
+            # Simple sentence splitting with better handling of abbreviations
+            sentences = []
+            
+            # Split by periods, exclamation marks, and question marks
+            parts = re.split(r'[.!?]+', text)
+            
+            for part in parts:
+                # Clean up whitespace
+                sentence = part.strip()
+                
+                # Skip empty sentences or very short ones
+                if len(sentence) > 10:
+                    sentences.append(sentence)
+            
+            return sentences
+        except Exception as e:
+            logger.error("Error splitting text into sentences", error=str(e))
+            return [text]
+
+    async def _get_embeddings(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for a list of texts."""
+        try:
+            # Use Google's embedding model to get embeddings
+            embeddings = await self.embedding_model.aembed_documents(texts)
+            return embeddings
+        except Exception as e:
+            logger.error("Error getting embeddings", error=str(e))
+            # Return dummy embeddings as fallback
+            return [[0.0] * 768 for _ in texts]
+
+    def _calculate_similarity_matrix(self, embeddings: List[List[float]]) -> np.ndarray:
+        """Calculate cosine similarity matrix between embeddings."""
+        try:
+            embeddings_array = np.array(embeddings)
+            similarity_matrix = cosine_similarity(embeddings_array)
+            return similarity_matrix
+        except Exception as e:
+            logger.error("Error calculating similarity matrix", error=str(e))
+            # Return identity matrix as fallback
+            n = len(embeddings)
+            return np.eye(n)
+
+    def _find_semantic_breakpoints(self, similarity_matrix: np.ndarray, threshold: float = None) -> List[int]:
+        """Find semantic breakpoints based on similarity drops."""
+        try:
+            if threshold is None:
+                threshold = self.semantic_threshold
+            
+            breakpoints = []
+            n = len(similarity_matrix)
+            
+            for i in range(n - 1):
+                # Calculate similarity between adjacent sentences
+                similarity = similarity_matrix[i][i + 1]
+                
+                # If similarity drops below threshold, it's a breakpoint
+                if similarity < threshold:
+                    breakpoints.append(i + 1)
+            
+            return breakpoints
+        except Exception as e:
+            logger.error("Error finding semantic breakpoints", error=str(e))
+            return []
+
+    async def _semantic_chunking(self, text: str) -> List[str]:
+        """Apply semantic chunking to text."""
+        try:
+            logger.info("Applying semantic chunking", text_length=len(text))
+            
+            # Step 1: Split text into sentences
+            sentences = self._split_into_sentences(text)
+            
+            if len(sentences) <= 1:
+                return [text]
+            
+            # Step 2: Get embeddings for all sentences
+            embeddings = await self._get_embeddings(sentences)
+            
+            # Step 3: Calculate similarity matrix
+            similarity_matrix = self._calculate_similarity_matrix(embeddings)
+            
+            # Step 4: Find semantic breakpoints
+            breakpoints = self._find_semantic_breakpoints(similarity_matrix)
+            
+            # Step 5: Create chunks based on breakpoints
+            chunks = []
+            start_idx = 0
+            
+            for breakpoint in breakpoints:
+                chunk_sentences = sentences[start_idx:breakpoint]
+                chunk_text = '. '.join(chunk_sentences)
+                
+                # Ensure chunk is not too large
+                if len(chunk_text) > self.chunk_size * 2:
+                    # Split large chunks further
+                    sub_chunks = self._split_large_semantic_chunk(chunk_text)
+                    chunks.extend(sub_chunks)
+                else:
+                    chunks.append(chunk_text)
+                
+                start_idx = breakpoint
+            
+            # Add the last chunk
+            if start_idx < len(sentences):
+                last_chunk_sentences = sentences[start_idx:]
+                last_chunk_text = '. '.join(last_chunk_sentences)
+                
+                if len(last_chunk_text) > self.chunk_size * 2:
+                    sub_chunks = self._split_large_semantic_chunk(last_chunk_text)
+                    chunks.extend(sub_chunks)
+                else:
+                    chunks.append(last_chunk_text)
+            
+            # Filter out empty chunks
+            chunks = [chunk.strip() for chunk in chunks if chunk.strip()]
+            
+            logger.info(
+                "Semantic chunking completed",
+                original_sentences=len(sentences),
+                breakpoints=len(breakpoints),
+                final_chunks=len(chunks)
+            )
+            
+            return chunks
+            
+        except Exception as e:
+            logger.error("Error in semantic chunking", error=str(e))
+            # Fallback to traditional text splitting
+            temp_doc = Document(text=text)
+            text_nodes = self.text_splitter.get_nodes_from_documents([temp_doc])
+            return [node.text for node in text_nodes]
+
+    def _split_large_semantic_chunk(self, chunk_text: str) -> List[str]:
+        """Split large semantic chunks into smaller ones."""
+        try:
+            # Use traditional text splitter for large chunks
+            temp_doc = Document(text=chunk_text)
+            text_nodes = self.text_splitter.get_nodes_from_documents([temp_doc])
+            return [node.text for node in text_nodes]
+        except Exception as e:
+            logger.error("Error splitting large semantic chunk", error=str(e))
+            return [chunk_text]
 
     def _enhance_text_extraction(self, text: str) -> str:
         """Enhance text extraction to better preserve table structures and numerical data."""
@@ -209,17 +367,14 @@ class PDFProcessorService:
                     )
                     chunks.append(chunk)
 
-                # Split text into regular chunks using get_nodes_from_documents
-                temp_doc = Document(text=doc.text)
-                text_nodes = self.text_splitter.get_nodes_from_documents([
-                                                                         temp_doc])
-                text_chunks = [node.text for node in text_nodes]
+                # Apply semantic chunking instead of traditional text splitting
+                text_chunks = await self._semantic_chunking(doc.text)
 
                 for chunk_idx, chunk_text in enumerate(text_chunks):
                     if not chunk_text.strip():
                         continue
 
-                    # Create document chunk
+                    # Create document chunk with semantic chunking metadata
                     chunk = DocumentChunk(
                         content=chunk_text.strip(),
                         metadata={
@@ -229,20 +384,24 @@ class PDFProcessorService:
                             'chunk_index': chunk_idx,
                             'total_chunks': len(text_chunks),
                             'chunk_size': len(chunk_text),
-                            'chunk_type': 'text'
+                            'chunk_type': 'semantic_text',
+                            'chunking_method': 'semantic',
+                            'semantic_threshold': self.semantic_threshold
                         }
                     )
                     chunks.append(chunk)
 
             logger.info(
-                "Successfully processed PDF with enhanced table handling",
+                "Successfully processed PDF with semantic chunking",
                 file_path=file_path,
                 total_chunks=len(chunks),
                 total_pages=len(documents),
                 table_chunks=len(
                     [c for c in chunks if c.metadata.get('chunk_type') == 'table']),
                 numerical_chunks=len(
-                    [c for c in chunks if c.metadata.get('chunk_type') == 'numerical'])
+                    [c for c in chunks if c.metadata.get('chunk_type') == 'numerical']),
+                semantic_chunks=len(
+                    [c for c in chunks if c.metadata.get('chunk_type') == 'semantic_text'])
             )
 
             return chunks

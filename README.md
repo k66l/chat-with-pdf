@@ -2,6 +2,22 @@
 
 A sophisticated multi-agent system that intelligently routes queries between PDF document search and web search, with advanced conversation memory and query disambiguation capabilities.
 
+## TL;DR
+
+This is a production-ready, LangGraph-powered multi-agent backend for “Chat With PDF.”  
+It intelligently routes user queries to either:
+
+- 🔍 PDF document search (FAISS + embeddings)
+- 🌐 Real-time web search (Tavily API)
+
+…and handles:
+
+- Ambiguous questions with clarification
+- Paper-specific targeting (e.g., “in Zhang et al. (2024)”)
+- Multi-turn memory via isolated session management
+
+No UI required — just clean architecture, modular code, and Dockerized deployment.
+
 ## 🏗️ System Architecture
 
 This system employs a **6-agent architecture** orchestrated by LangGraph to provide intelligent question-answering capabilities:
@@ -503,3 +519,20 @@ Specialized handling of research paper tables:
 2. **Method-Score Correlation**: Connects approaches with their results
 3. **Performance Ranking**: Identifies highest-performing methods
 4. **Clean Presentation**: Removes inline citations for clarity
+
+## 📈 Future Improvements
+
+- **Multi-User Scalability**: Add persistent memory store (Redis or Postgres) for concurrent users
+- **Frontend UI**: Integrate a Streamlit or React frontend for user-friendly interaction
+- **LLM Flexibility**: Support multiple LLM backends (Anthropic, Mistral, Claude, etc.)
+- **Automatic PDF Ingestion**: Enable dynamic paper fetching (e.g., via arXiv API or citation graph)
+- **Evaluation Pipeline**: Add test harness using golden Q&A pairs with scoring metrics (F1, BLEU, etc.)
+- **Knowledge Graph Integration**: Augment document retrieval with lightweight KG over entity mentions
+
+## ⚠️ Known Limitations
+
+- **Scalability**: Optimized for a small corpus (4 papers); vector index and chunking may need tuning for larger datasets
+- **Ambiguity Detection**: Uses simple patterns and LLM prompts; not fine-tuned for edge cases
+- **Clarification Logic**: Limited fallback if clarification fails (e.g., vague query without LLM classification)
+- **Evaluation**: Currently lacks automated validation/testing framework beyond manual query testing
+- **Chunk Size Sensitivity**: 500-token chunks work for current PDFs but may need adjustment for others (e.g., code-heavy or image-heavy docs)

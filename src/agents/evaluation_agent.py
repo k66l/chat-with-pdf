@@ -179,8 +179,13 @@ class EvaluationAgent:
             Provide only a decimal score between 0.0 and 1.0:"""
 
             score_text = await llm_service.generate_simple_response(relevance_prompt)
-            score = float(re.search(r'(\d+\.?\d*)', score_text).group(1))
-            return min(max(score, 0.0), 1.0)
+            match = re.search(r'(\d+\.?\d*)', score_text)
+            if match:
+                score = float(match.group(1))
+                return min(max(score, 0.0), 1.0)
+            else:
+                logger.warning("Could not extract score from relevance evaluation", score_text=score_text)
+                return 0.5
 
         except Exception as e:
             logger.error("Error evaluating relevance", error=str(e))
@@ -205,8 +210,13 @@ class EvaluationAgent:
             Provide only a decimal score between 0.0 and 1.0:"""
 
             score_text = await llm_service.generate_simple_response(completeness_prompt)
-            score = float(re.search(r'(\d+\.?\d*)', score_text).group(1))
-            return min(max(score, 0.0), 1.0)
+            match = re.search(r'(\d+\.?\d*)', score_text)
+            if match:
+                score = float(match.group(1))
+                return min(max(score, 0.0), 1.0)
+            else:
+                logger.warning("Could not extract score from completeness evaluation", score_text=score_text)
+                return 0.5
 
         except Exception as e:
             logger.error("Error evaluating completeness", error=str(e))

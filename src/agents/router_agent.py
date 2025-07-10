@@ -336,23 +336,39 @@ class RouterAgent:
         try:
             question_lower = question.lower()
 
-            # Vague quantitative patterns
-            vague_patterns = [
-                r'\b(enough|sufficient|good|best|optimal|better|worse)\b',
-                r'\b(many|few|much|little)\b(?!\s+\w+\s+(dataset|model|paper))'
+            # Core vague/subjective terms that need context to be meaningful
+            vague_terms = [
+                r'\b(good|bad|best|better|worse|great|excellent|poor|okay|perfect|special)\b',
+                r'\b(big|small|large|little|huge|tiny|short|long|tall|high|low|close|far)\b', 
+                r'\b(fast|slow|quick|rapid|sluggish|soon|late)\b',
+                r'\b(much|many|few|little|enough|sufficient|too|minimum|maximum)\b',
+                r'\b(right|wrong|correct|proper|appropriate|safe|smart|easy|hard)\b',
+                r'\b(valuable|worthless|important|significant|real|true|actual)\b',
+                r'\b(ready|prepared|finished|done|complete|strong|weak)\b',
+                r'\b(fair|unfair|reasonable|unreasonable)\b',
+                r'\b(worth|worthwhile|costly|expensive|cheap)\b'
             ]
 
-            # Model-specific vague patterns
-            model_vague_patterns = [
-                r'\bgood\s+model\b',
-                r'\bbest\s+model\b',
-                r'\boptimal\s+model\b'
+            # Question patterns that are inherently context-dependent
+            context_dependent_patterns = [
+                r'^(what|which|how)\s+(is|are|was|were|will|should|would|could|can|do|does|did)\s+.*\s+(good|best|right|enough|much|big|fast|ready|worth|valuable|fair|safe|smart|easy)\b',
+                r'^(is|are|was|were|will)\s+.*\s+(going\s+to\s+be|worth|good|bad|ready|enough|safe|okay|better)\b',
+                r'^how\s+(much|many|big|fast|long|far|often|soon|high|close|strong)\s+.*\s+(is|are|should|would|too|enough)\b',
+                r'^what.*(makes|means|defines|determines).*\s+(good|valuable|important|fair|right|special|worthwhile)\b',
+                r'^when\s+should\s+(i|we|one|you)\s+.*\b(?!.*\b(dataset|model|training|algorithm|paper|research)\b)',
+                r'^(should|would|could|can)\s+(i|we|one|you)\s+.*\b(?!.*\b(use|implement|apply|train|evaluate)\b)',
+                r'^\w+.*(way|approach|method|choice|move|thing)\s+to\s+(get\s+started|finish|win|proceed|continue)\b(?!.*\b(training|model|algorithm)\b)',
+                r'^how\s+do\s+(i|we|you)\s+(know|make|measure)\s+.*\s+(done|better|progress)\b(?!.*\b(accuracy|performance|metric)\b)'
             ]
 
-            # Context-dependent patterns
-            subjective_patterns = [
-                r'\bgood\s+accuracy\b', r'\bhigh\s+performance\b', r'\blow\s+error\b',
-                r'\bfast\s+enough\b', r'\b(slow|efficient|effective)\b'
+            # Philosophical/subjective question patterns
+            philosophical_patterns = [
+                r'what.*(point|meaning|purpose|difference|goal|value|cost).*of\b',
+                r'what.*makes.*\b(valuable|important|good|great|special|worthwhile)\b',
+                r'what.*does.*\b(success|progress|done|better|perfect)\b.*look\s+like\b',
+                r'is.*it.*(better|worth|good|bad|safe|okay).*to\b',
+                r'what.*(real|true|actual)\s+(value|cost|difference)\b',
+                r'^is\s+(this|now|it)\s+(better|worse|safer|okay)\s+than\b'
             ]
 
             # Ambiguous question patterns (very specific)
@@ -376,16 +392,14 @@ class RouterAgent:
                 r'\bwith\s+(transformer|neural|deep)\b'
             ]
 
-            # Check for vague patterns first
+            # Check for all types of vague/ambiguous patterns
             import re
-            has_vague = any(re.search(pattern, question_lower, re.IGNORECASE)
-                            for pattern in vague_patterns)
-            has_subjective = any(re.search(
-                pattern, question_lower, re.IGNORECASE) for pattern in subjective_patterns)
-
-            # Check for model-specific vague patterns
-            has_model_vague = any(re.search(pattern, question_lower, re.IGNORECASE)
-                                  for pattern in model_vague_patterns)
+            has_vague_terms = any(re.search(pattern, question_lower, re.IGNORECASE)
+                                  for pattern in vague_terms)
+            has_context_dependent = any(re.search(pattern, question_lower, re.IGNORECASE)
+                                        for pattern in context_dependent_patterns)
+            has_philosophical = any(re.search(pattern, question_lower, re.IGNORECASE)
+                                    for pattern in philosophical_patterns)
 
             # Check for specific ambiguous patterns first
             for pattern in ambiguous_patterns:
@@ -394,41 +408,28 @@ class RouterAgent:
                                 question=question, pattern=pattern)
                     return True
 
-            # Very vague questions should be ambiguous even with some academic context
-            # Example: "How many examples are enough for good accuracy"
-            very_vague_indicators = [
-                r'\benough\b.*\b(good|high|sufficient)\b',
-                r'\b(good|best|optimal)\b.*\b(enough|sufficient)\b',
-                r'\bhow\s+(much|many)\b.*\b(enough|good)\b'
-            ]
-
-            is_very_vague = any(re.search(pattern, question_lower, re.IGNORECASE)
-                                for pattern in very_vague_indicators)
-
-            if is_very_vague and len(question.split()) <= 10:
-                logger.info("Detected very ambiguous query (vague with subjective terms)",
-                            question=question)
+            # Check for context-dependent or philosophical questions first (highest priority)
+            if has_context_dependent or has_philosophical:
+                logger.info("Detected ambiguous query (context-dependent or philosophical)",
+                            question=question,
+                            has_context_dependent=has_context_dependent,
+                            has_philosophical=has_philosophical)
                 return True
 
-            # If question has strong context indicators and is NOT very vague, it's likely NOT ambiguous
+            # If question has strong academic context indicators, it's likely NOT ambiguous
             has_context = any(re.search(pattern, question_lower, re.IGNORECASE)
                               for pattern in context_patterns)
 
-            if has_context and not is_very_vague:
-                logger.info("Question has context indicators, not marking as ambiguous",
+            if has_context and not (has_context_dependent or has_philosophical):
+                logger.info("Question has academic context indicators, not marking as ambiguous",
                             question=question)
                 return False
 
-            # Mark as ambiguous if short AND contains vague/subjective terms AND no strong context
-            if (has_vague or has_subjective or has_model_vague) and len(question.split()) <= 8 and not has_context:
-                logger.info("Detected ambiguous query (short question with vague terms)",
-                            question=question)
-                return True
-
-            # Mark as ambiguous if contains model-specific vague terms without strong context
-            if has_model_vague and not has_context:
-                logger.info("Detected ambiguous query (model-specific vague terms without context)",
-                            question=question)
+            # Mark as ambiguous if contains vague terms without strong academic context
+            if has_vague_terms and not has_context:
+                logger.info("Detected ambiguous query (vague terms without academic context)",
+                            question=question, 
+                            has_vague_terms=has_vague_terms)
                 return True
 
             return False
@@ -494,6 +495,26 @@ class RouterAgent:
                 5. **What performance target** do you need to achieve?
 
                 Please specify these details so I can provide relevant training time estimates from the available research."""
+
+            elif any(term in question_lower for term in ["successful", "success"]) and any(term in question_lower for term in ["long", "time", "take", "become"]):
+                return """Your question about success is too general for this academic research database. I need clarification:
+
+                1. **What specific domain** are you asking about? (e.g., machine learning, text-to-SQL, model training)
+                2. **What type of success** do you mean? (e.g., achieving certain accuracy, completing training, reaching performance benchmarks)
+                3. **What specific context** or task are you interested in?
+                4. **What metrics** would define success in your case?
+
+                Please provide more specific details so I can search the research papers for relevant information."""
+
+            elif any(term in question_lower for term in ["good", "best", "right", "worth", "valuable", "fair", "enough", "much", "big", "fast", "safe", "smart", "easy", "special", "perfect", "strong", "close", "high", "real", "true"]):
+                return """Your question contains subjective terms that need specific context. I need clarification:
+
+                1. **What specific domain or task** are you asking about? (e.g., machine learning models, text-to-SQL systems, datasets, algorithms)
+                2. **What criteria** would you use to measure these qualities? (e.g., accuracy metrics, performance benchmarks, specific requirements)
+                3. **What's your specific use case** or application context?
+                4. **What are you comparing against** or what's your baseline?
+
+                Please provide these details so I can search the research papers for relevant quantitative information."""
 
             else:
                 # General clarification prompt with academic focus
