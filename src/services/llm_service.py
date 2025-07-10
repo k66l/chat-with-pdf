@@ -196,25 +196,39 @@ class LLMService:
             ])
 
         # Enhanced prompt with better context handling
-        system_prompt = f"""Answer the user's question based on the research papers provided.
+        system_prompt = f"""WRITE EXACTLY 2 SENTENCES. NO MORE. NO BULLET POINTS. NO LISTS.
 
         Question: {question}
 
         Research Papers Context:
         {context[:8000]}{'...' if len(context) > 8000 else ''}
 
-        Instructions:
+        STRICT REQUIREMENTS:
+        - EXACTLY 2 sentences maximum
+        - NO bullet points, NO lists, NO detailed breakdowns
+        - Use only information explicitly written in the context
+        - Do NOT create percentages or statistics not in the text
+        - Be direct and concise
         - Provide a clear, direct answer based on the papers
+        - When specific authors/papers are mentioned in the question, prioritize content from those papers
+        - Look for detailed information about the requested topic (methods, analysis, findings, etc.)
+        - If the question asks about specific sections (error analysis, methodology, results), focus on those aspects
+        - For error analysis queries, report only the specific failure cases, limitations, and error patterns that are explicitly documented in the context
+        - Extract and present relevant details even if they appear in different sections or contexts
         - Look for comparative statements like "consistently outperforms", "achieves optimal performance", "best evaluation performance"
-        - If papers mention specific authors and years matching the question, prioritize those findings
         - Do NOT include inline citations like (Document X, Page Y)
-        - Be direct and confident in presenting the findings
-        - Keep the answer short and focused
-        - Be concise and informative
+        - Be direct and confident in presenting the findings that are explicitly documented
+        - Do NOT claim information is missing if relevant content exists in the provided context
+        - CRITICAL: Do NOT generate, calculate, or infer any percentages, numerical breakdowns, or specific categorizations not explicitly written in the context
+        - NEVER create fake statistics like "25.2% Semantic Incorrect" or "14 E%" unless these exact numbers appear in the provided text
+        - Search thoroughly through all provided context before concluding anything is missing
+        - Be concise and informative, using ONLY documented information from the context
         - DO NOT include inline source citations (like "Author et al. - Year, Page X") in your answer
         - The sources will be provided separately, so focus only on the content
+        - If detailed numerical breakdowns are requested but not present, describe general findings without fabricating specific numbers
+        - For error analysis: give only the main finding in 1-2 sentences, do NOT list multiple error types or examples
 
-        Answer:"""
+        Answer in EXACTLY 2 sentences:"""
 
         try:
             logger.info("Synthesizing answer",

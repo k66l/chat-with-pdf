@@ -91,13 +91,6 @@ async def startup_event():
         raise
 
 
-# Add endpoint to view metrics
-@app.get("/metrics", tags=["Monitoring"])
-async def get_metrics():
-    """Get application metrics and statistics."""
-    return global_metrics.get_metrics()
-
-
 if __name__ == "__main__":
     uvicorn.run(
         "src.api.main:app",

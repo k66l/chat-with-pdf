@@ -197,6 +197,11 @@ class PDFAgent:
                 'execution', 'exact match', 'f1', 'table', 'figure', 'data'
             ]) or any(char.isdigit() for char in question)
 
+            # Check for error analysis queries specifically
+            is_error_analysis_query = any(term in question.lower() for term in [
+                'error', 'analysis', 'failure', 'mistake', 'wrong', 'incorrect'
+            ])
+
             # Check for queries about comparative performance or rankings
             is_prompt_accuracy_query = any(term in question.lower() for term in [
                 'highest', 'best', 'top', 'optimal', 'maximum', 'superior',
@@ -205,9 +210,9 @@ class PDFAgent:
                 'accuracy', 'performance', 'score', 'result'
             ])
 
-            if is_prompt_accuracy_query:
-                # Enhanced prompt for best approach/method queries
-                enhanced_prompt = f"""Answer the question about the best approach or method based on the research data provided.
+            if is_error_analysis_query:
+                # Specific prompt for error analysis to prevent fabrication
+                enhanced_prompt = f"""Answer the question about error analysis using only the information explicitly documented in the provided context.
 
                 Question: {question}
 
@@ -215,22 +220,43 @@ class PDFAgent:
                 {context}
 
                 Instructions:
-                1. In the NUMERICAL DATA sections, look for patterns where method names are followed by numerical values
-                2. Extract method names and their corresponding highest numerical scores
-                3. The format typically shows: "MethodName [various numbers] highest_score"
-                4. Identify the method with the highest score as the best approach
-                5. Present the recommendation directly with method names and their performance scores
-                6. Do NOT include inline citations
-                7. Do NOT use hedging language - be direct and confident
-                8. Extract the actual performance data from the numerical sections
+                - Describe ONLY the error types, examples, and findings that are explicitly mentioned in the context
+                - NEVER generate specific percentages or numerical breakdowns like "25.2%" unless they appear in the provided text
+                - Focus on documented error examples, patterns, and conclusions from the authors
+                - If the context mentions general performance metrics (like overall accuracy), include only those exact numbers
+                - Describe error categories only if they are named and described in the context
+                - Keep the explanation brief and focused on documented findings
+                - Do NOT fabricate statistical breakdowns or categorization percentages
 
-                Format: State the paper's recommendations directly with method names and their performance scores."""
+                Format: Provide a brief explanation using only the documented error analysis information."""
+
+                return await llm_service.generate_simple_response(enhanced_prompt)
+
+            elif is_prompt_accuracy_query:
+                # Conservative prompt for best approach/method queries
+                enhanced_prompt = f"""Answer the question about the best approach or method based strictly on what is documented in the provided context.
+
+                Question: {question}
+
+                Context from research papers:
+                {context}
+
+                Instructions:
+                - Extract ONLY the numerical data and method names that are explicitly stated in the context
+                - NEVER infer, calculate, or generate percentages not directly written in the text
+                - Present only the performance comparisons that are clearly documented
+                - If specific numerical breakdowns are not in the context, describe findings generally without fabricating numbers
+                - Focus on what the authors explicitly conclude about methods and performance
+                - Do not create detailed categorizations unless they appear verbatim in the context
+                - CRITICAL: Do not fabricate statistics like "25.2%" or "14 E%" - only use numbers that actually appear in the text
+
+                Format: Present the documented findings using only the data explicitly provided in the context."""
 
                 return await llm_service.generate_simple_response(enhanced_prompt)
 
             elif is_numerical_query:
-                # Enhanced prompt for numerical data
-                enhanced_prompt = f"""You are answering a question about specific numerical data from research papers. 
+                # Conservative prompt for numerical data
+                enhanced_prompt = f"""Answer the question about numerical data using only what is explicitly stated in the provided context.
                 
                 Question: {question}
                 
@@ -238,15 +264,15 @@ class PDFAgent:
                 {context}
                 
                 Instructions:
-                1. Extract EXACT method names from the NUMERICAL DATA sections and match them with their scores
-                2. Identify the highest performing methods with their specific numerical results
-                3. Present the findings as definitive results from the paper
-                4. Do NOT include inline citations like (Document X, Page Y)
-                5. Do NOT use hedging language like "appears to be" or "seems to indicate"
-                6. Be direct and confident in presenting the numerical results
-                7. Keep the answer short and focused on the specific data requested
+                - Report ONLY numerical values that are directly written in the context
+                - NEVER calculate, infer, or generate any percentages not explicitly stated
+                - Quote exact numbers and metrics as they appear in the text
+                - If detailed breakdowns are not provided, summarize what is actually documented without adding fake numbers
+                - Focus on the specific numerical data the authors present
+                - Do not create error categories or percentages unless they appear verbatim
+                - CRITICAL: If you cannot find specific percentages in the context, do NOT make them up
                 
-                Format: State the numerical results directly with their corresponding method names."""
+                Format: Provide a very brief 1-2 sentence summary."""
 
                 return await llm_service.generate_simple_response(enhanced_prompt)
             else:
@@ -274,47 +300,51 @@ class PDFAgent:
             # First, try the regular search
             docs = await self.search_documents(question)
 
-            # Extract paper information from the question
-            # Look for pattern: "...in [Author] [Year]" or "...in [Author] et al. [Year]"
-            paper_match = re.search(r'\bin\s+([A-Z][a-z]+(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\(?\d{4}\)?)', question)
-            
-            # Also check for author/year patterns for backward compatibility
-            author_match = re.search(
-                r'([A-Z][a-z]+)(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\((\d{4})\)', question) or \
-                re.search(r'([A-Z][a-z]+)(?:\s+et\s+al\.?)?\s*\((\d{4})\)', question) or \
-                re.search(r'([A-Z][a-z]+)(?:\s+and\s+[A-Z][a-z]+)?\s*.*?(\d{4})', question)
+            # Extract paper information from the question - multiple patterns
+            # Pattern 1: "...in [Author] [Year]" or "...in [Author] et al. [Year]"
+            paper_match = re.search(
+                r'\bin\s+([A-Z][a-z]+(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\(?\d{4}\)?)', question)
+
+            # Pattern 2: "[Author] et al. - [Year]" or "[Author] et al. [Year]" anywhere in the question
+            author_match = re.search(r'([A-Z][a-z]+)\s+et\s+al\.?\s*-?\s*(\d{4})', question) or \
+                re.search(r'([A-Z][a-z]+)\s+et\s+al\.?\s*\((\d{4})\)', question) or \
+                re.search(r'([A-Z][a-z]+)(?:\s+(?:and|et\s+al\.?))?\s+[A-Z][a-z]*(?:\s+et\s+al\.?)?\s*\((\d{4})\)', question) or \
+                re.search(
+                    r'([A-Z][a-z]+)(?:\s+and\s+[A-Z][a-z]+)?\s*.*?(\d{4})', question)
 
             # Handle paper-specific search using "in [Paper Reference]" pattern
             if paper_match:
                 paper_reference = paper_match.group(1)
                 logger.info(f"Found paper reference: {paper_reference}")
-                
+
                 # Search directly for the paper reference
                 paper_docs = await self.search_documents(paper_reference, top_k=10, score_threshold=0.05)
                 docs.extend(paper_docs)
-                
+
                 # Extract author and year from the paper reference
                 ref_author_match = re.search(r'([A-Z][a-z]+)', paper_reference)
                 ref_year_match = re.search(r'(\d{4})', paper_reference)
-                
+
                 if ref_author_match and ref_year_match:
                     author_name = ref_author_match.group(1)
                     year = ref_year_match.group(1)
-                    
+
                     # Filter for documents from this specific paper
                     paper_specific_docs = [
                         doc for doc in docs
                         if author_name.lower() in doc['metadata'].get('source', '').lower() and
                         year in doc['metadata'].get('source', '')
                     ]
-                    
+
                     # If we found paper-specific docs, prioritize them heavily
                     if paper_specific_docs:
-                        logger.info(f"Found {len(paper_specific_docs)} documents from {author_name} {year}")
+                        logger.info(
+                            f"Found {len(paper_specific_docs)} documents from {author_name} {year}")
                         for doc in paper_specific_docs:
-                            doc['score'] = doc['score'] * 3.0  # Triple boost for exact paper match
+                            # Triple boost for exact paper match
+                            doc['score'] = doc['score'] * 3.0
                         docs.extend(paper_specific_docs)
-            
+
             elif author_match:
                 author_name = author_match.group(1)
                 year = author_match.group(2)
@@ -349,6 +379,17 @@ class PDFAgent:
                     for word in question_words:
                         if any(char.isdigit() for char in word):
                             key_terms.append(word)
+
+                    # Add specific error analysis terms if mentioned
+                    error_analysis_terms = [
+                        'error', 'analysis', 'failure', 'mistake', 'incorrect', 'wrong', 'limitation', 'challenge']
+                    for word in question_words:
+                        if word in error_analysis_terms:
+                            key_terms.append(word)
+                            # Also add common error analysis combinations
+                            if word == 'error' or word == 'analysis':
+                                key_terms.extend(
+                                    ['error analysis', 'failure analysis', 'error patterns'])
 
                     for term in key_terms:
                         term_docs = await self.search_documents(term, top_k=8, score_threshold=0.05)
@@ -430,7 +471,8 @@ class PDFAgent:
                     source = doc['metadata'].get('source', '')
                     if author_name.lower() in source.lower() and year in source:
                         # Boost the score significantly for mentioned author's content
-                        doc['score'] = doc['score'] * 2.0  # 100% boost for exact match
+                        # 100% boost for exact match
+                        doc['score'] = doc['score'] * 2.0
                         author_docs.append(doc)
                     else:
                         other_docs.append(doc)
